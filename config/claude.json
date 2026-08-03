@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "defaultMode": "acceptEdits"
+  },
+  "effortLevel": "high",
+  "autoUpdatesChannel": "latest",
+  "theme": "dark",
+  "editorMode": "normal",
+  "verbose": true,
+  "terminalProgressBarEnabled": true,
+  "ai_access": true
+  "env":{
+	"ANTHROPIC_AUTH_TOKEN": "ollama",
+    "ANTHROPIC_API_KEY": "",
+    "ANTHROPIC_BASE_URL": "http://localhost:11434"
+  }
+}

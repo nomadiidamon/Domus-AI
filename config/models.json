@@ -1,0 +1,20 @@
+{
+  "Mercury": {
+    "base": "qwen2.5-coder:14b",
+    "modelfile": "D:\\AI\\Modelfiles\\Mercury\\Modelfile",
+    "profile": "development",
+    "description": "Fast coding assistant for everyday development, debugging and feature implementation."
+  },
+  "Vulcan": {
+    "base": "deepseek-coder-v2:16b",
+    "modelfile": "D:\\AI\\Modelfiles\\Vulcan\\Modelfile",
+    "profile": "performance",
+    "description": "Heavy reasoning agent for difficult debugging, repository analysis and architectural work."
+  },
+  "Minerva": {
+    "base": "starcoder2:7b",
+    "modelfile": "D:\\AI\\Modelfiles\\Minerva\\Modelfile",
+    "profile": "lightweight",
+    "description": "Lightweight assistant for scripts, explanations and quick fixes."
+  }
+}
