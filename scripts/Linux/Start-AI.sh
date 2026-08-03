@@ -1,0 +1,1 @@
+# Will call the main.py script and pass the arguments to it
