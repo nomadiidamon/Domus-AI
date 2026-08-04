@@ -3,9 +3,9 @@ import sys
 import logging
 from typing import Optional
 
-from ollama import start_ollama, start_model, stop_ollama, stop_model, get_active_processes
-# from session import stop_session, show_status
-# from models import build_model
+from .ollama_service import start_ollama, stop_ollama
+from session import stop_session, get_status
+from models import start_model, stop_model, build_model
 from doctor import full_diagnostic
 
 # Configure logging
@@ -110,37 +110,36 @@ def handle_stop(args: list) -> None:
         print(f"✗ Error: {e}")
         sys.exit(1)
 
-def handle_status(args: list) -> None:
-    """Handle the 'status' command."""
-    try:
-        processes = get_active_processes()
-        
-        if processes["ollama_server"] is None and not processes["models"]:
-            print("✗ No models or Ollama server running")
-            return
-        
-        print("\n📊 Local AI Runtime Status")
-        print("=" * 50)
-        
-        if processes["ollama_server"] is not None:
-            status = "🟢 Running" if processes["ollama_server"]["running"] else "🔴 Stopped"
-            print(f"Ollama Server: {status} (PID: {processes['ollama_server']['pid']})")
-        
-        if processes["models"]:
-            print(f"\nActive Models ({len(processes['models'])}):")
-            for model_info in processes["models"]:
-                status = "🟢 Running" if model_info["running"] else "🔴 Stopped"
-                print(f"  - {model_info['name']}: {status} (PID: {model_info['pid']})")
-        else:
-            print("\nActive Models: None")
-        
-        print("=" * 50)
-        show_status()
-        
-    except Exception as e:
-        logger.error(f"Error getting status: {e}")
-        print(f"✗ Error: {e}")
-        sys.exit(1)
+def handle_status():
+
+    sessions = get_status()
+
+
+    if not sessions:
+
+        print("No active sessions")
+        return
+
+
+    print("\nActive Sessions:")
+
+    for session in sessions:
+
+        state = (
+            "RUNNING"
+            if session["running"]
+            else "STOPPED"
+        )
+
+        print(
+            f"""
+Name: {session['name']}
+Type: {session['type']}
+PID: {session['pid']}
+State: {state}
+Started: {session['started']}
+"""
+        )
 
 def handle_build(args: list) -> None:
     """Handle the 'build' command."""
@@ -163,7 +162,7 @@ def handle_build(args: list) -> None:
         print(f"✗ Error: {e}")
         sys.exit(1)
 
-def handle_doctor(args: list) -> None:
+def handle_doctor():
     """Handle the 'doctor' command."""
     logger.info("Running diagnostic checks...")
     print("\n🔍 Running diagnostic checks...")
@@ -196,7 +195,6 @@ def handle_mcp(args: list) -> None:
     else:
         print(f"⚠ MCP functionality not yet fully implemented: {action}")
         # TODO: Implement other MCP functionality
- 
  
 def handle_mcp_launch(args: list) -> None:
     """Handle launching Claude Code via Ollama."""
@@ -232,7 +230,6 @@ def handle_mcp_launch(args: list) -> None:
         print(f"✗ Unexpected error: {e}")
         sys.exit(1)
 
-
 def main() -> int:
     """
     Main entry point for the CLI.
@@ -254,11 +251,11 @@ def main() -> int:
         elif command == "stop":
             handle_stop(args)
         elif command == "status":
-            handle_status(args)
+            handle_status()
         elif command == "build":
             handle_build(args)
         elif command == "doctor":
-            handle_doctor(args)
+            handle_doctor()
         elif command == "mcp":
             handle_mcp(args)
         elif command in ["help", "-h", "--help"]:

@@ -1,62 +1,88 @@
-# Handles the Claude Code integration.
+"""
+Handles the Claude Code integration through Ollama.
+"""
+
 import subprocess
 import logging
 from typing import Optional
 
+from session import create_session, get_session, stop_session
+
+
 logger = logging.getLogger(__name__)
 
 
-def ollama_launch_claude(model: str, auto_yes: bool = False) -> Optional[subprocess.Popen]:
-    """
-    Launch Claude Code with a specified Ollama model.
-    
-    Uses the Ollama integration: `ollama launch claude --model <model>`
-    See: https://docs.ollama.com/integrations/claude-code
-    
-    Args:
-        model: Name of the Ollama model to use (e.g., 'qwen3.5', 'gemma4:cloud')
-        auto_yes: If True, skip selectors and prompts (useful for CI/automation)
-        
-    Returns:
-        Process handle if launched, None if command fails
-        
-    Raises:
-        ValueError: If model name is invalid
-        RuntimeError: If Ollama launch command fails
-    """
+CLAUDE_SESSION_NAME = "claude"
+
+
+def ollama_launch_claude(
+    model: str,
+    auto_yes: bool = False
+) -> Optional[subprocess.Popen]:
+
     if not model or not isinstance(model, str):
-        raise ValueError(f"Model must be a non-empty string, got: {model}")
-    
+        raise ValueError(
+            f"Model must be a non-empty string, got: {model}"
+        )
+
+
+    existing = get_session(CLAUDE_SESSION_NAME)
+
+    if existing:
+        logger.info("Claude Code already running")
+        return existing.process
+
+
+    command = [
+        "ollama",
+        "launch",
+        "claude",
+        "--model",
+        model
+    ]
+
+
+    if auto_yes:
+        command.append("--yes")
+
+
     try:
-        logger.info(f"Launching Claude Code with model: {model}")
-        
-        # Build command: ollama launch claude --model <model> [--yes]
-        command = ["ollama", "launch", "claude", "--model", model]
-        
-        if auto_yes:
-            command.append("--yes")
-            logger.debug("Auto-yes mode enabled (will skip prompts)")
-        
+
+        logger.info(
+            f"Launching Claude Code through Ollama using {model}"
+        )
+
+
         process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
         )
-        
-        logger.debug(f"Claude Code process started with PID: {process.pid}")
-        logger.info(f"Claude Code is launching - you can interact with it now")
-        return process
-        
-    except FileNotFoundError:
-        logger.error("Ollama not found in PATH. Please install Ollama: https://ollama.ai")
-        raise RuntimeError(
-            "Ollama is not installed or not in PATH. "
-            "Please install it from https://ollama.ai and try again."
+
+
+        create_session(
+            name=CLAUDE_SESSION_NAME,
+            process=process,
+            session_type="integration",
+            metadata={
+                "provider": "ollama",
+                "integration": "claude",
+                "model": model
+            }
         )
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Ollama launch claude failed: {e.stderr}")
-        raise RuntimeError(f"Failed to launch Claude Code: {e.stderr}")
-    except Exception as e:
-        logger.error(f"Unexpected error launching Claude Code: {e}")
-        raise
+
+
+        return process
+
+
+    except FileNotFoundError:
+
+        raise RuntimeError(
+            "Ollama is not installed or not in PATH."
+        )
+
+
+def stop_claude():
+
+    return stop_session(CLAUDE_SESSION_NAME)
