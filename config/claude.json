@@ -8,7 +8,7 @@
   "editorMode": "normal",
   "verbose": true,
   "terminalProgressBarEnabled": true,
-  "ai_access": true
+  "ai_access": true,
   "env":{
 	"ANTHROPIC_AUTH_TOKEN": "ollama",
     "ANTHROPIC_API_KEY": "",
