@@ -1,51 +1,34 @@
 ﻿# Checks for all needed dependencies: Python, Ollama, Claude, Git, Models, MCP validation, and more. If any dependencies are missing, it will prompt the user to install them.
 
 import subprocess
-import sys
-import os
 import logging
+import urllib.request
+import urllib.error
 from typing import Dict, List, Tuple
-import json
+from pathlib import Path
+from dependencies import (
+    DependencyChecker, PythonPackageDependency,
+    SystemCommandDependency, DependencyStatus
+)
 
 logger = logging.getLogger(__name__)
 
-def check_dependency(name: str, command: str) -> Tuple[bool, str]:
-    """
-    Check if a dependency is installed.
-    
-    Args:
-        name: Friendly name of the dependency
-        command: Command to check version
-        
-    Returns:
-        Tuple of (is_installed, version_output)
-    """
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            timeout=5
-        )
-        version = result.stdout.strip().split('\n')[0] if result.stdout else "installed"
-        logger.debug(f"{name}: {version}")
-        return True, version
-        
-    except subprocess.TimeoutExpired:
-        logger.warning(f"{name} check timed out")
-        return False, "timeout"
-    except subprocess.CalledProcessError as e:
-        logger.debug(f"{name} not found: {e}")
-        return False, str(e)
-    except FileNotFoundError:
-        logger.debug(f"{name} command not found in PATH")
-        return False, "not in PATH"
-    except Exception as e:
-        logger.debug(f"Error checking {name}: {e}")
-        return False, str(e)
+OLLAMA_API_BASE = "http://localhost:11434"
+
+def _build_checker() -> DependencyChecker:
+    """Build the standard dependency checker for the runtime."""
+    checker = DependencyChecker()
+
+    checker.register_many([
+        SystemCommandDependency("python",  required=True,  description="Python interpreter"),
+        SystemCommandDependency("ollama",  required=True,  description="Ollama runtime"),
+        SystemCommandDependency("git",     required=True,  description="Git version control"),
+        SystemCommandDependency("claude",  required=False, description="Claude Code (optional)"),
+        PythonPackageDependency("psutil",  required=True,  description="System monitoring"),
+        PythonPackageDependency("pynvml",  required=True, description="NVIDIA GPU monitoring (required only for NVIDIA GPUs)"),
+    ])
+
+    return checker
 
 def check_dependencies() -> Tuple[bool, Dict[str, bool]]:
     """
@@ -57,60 +40,64 @@ def check_dependencies() -> Tuple[bool, Dict[str, bool]]:
     print("\n📦 Checking Dependencies")
     print("-" * 50)
     
-    dependencies = {
-        "Python": "python --version",
-        "Ollama": "ollama --version",
-        "Git": "git --version",
-    }
-    
-    optional_dependencies = {
-        "Claude Code": "claude --version",
-    }
-    
+    checker = _build_checker()
+    results = checker.check_all()
+
     status = {}
-    missing_required = []
-    missing_optional = []
-    
-    # Check required dependencies
-    for name, command in dependencies.items():
-        is_installed, version = check_dependency(name, command)
-        status[name] = is_installed
-        
-        if is_installed:
-            print(f"✓ {name}: {version}")
+    all_satisfied = True
+
+    for name, result in results.items():
+        status[name] = result.is_healthy
+        dep = checker.dependencies[name]
+
+        if result.is_healthy:
+            print(f"✓ {name}: {result.version or result.message}")
+        elif not dep.required:
+            print(f"⚠ {name}: NOT FOUND (optional)")
         else:
             print(f"✗ {name}: NOT FOUND")
-            missing_required.append(name)
-    
-    # Check optional dependencies
-    for name, command in optional_dependencies.items():
-        is_installed, version = check_dependency(name, command)
-        status[name] = is_installed
-        
-        if is_installed:
-            print(f"✓ {name}: {version}")
-        else:
-            print(f"⚠ {name}: NOT FOUND (optional)")
-            missing_optional.append(name)
-    
-    all_satisfied = len(missing_required) == 0
-    
-    if missing_required:
+            all_satisfied = False
+
+    summary = checker.get_summary()
+
+    if not all_satisfied:
         print("\n⚠ REQUIRED dependencies missing:")
-        for dep in missing_required:
-            print(f"  • {dep}")
-        print("\nPlease install the missing dependencies:")
-        print("  - Ollama: https://ollama.ai")
-        print("  - Git: https://git-scm.com")
-    
+        for name, result in results.items():
+            dep = checker.dependencies[name]
+            if dep.required and not result.is_healthy:
+                print(f"  • {name} — {dep.get_install_instructions()}")
+
+    missing_optional = [
+        name for name, result in results.items()
+        if not result.is_healthy and not checker.dependencies[name].required
+    ]
     if missing_optional:
         print("\n⚠ OPTIONAL dependencies missing:")
-        for dep in missing_optional:
-            print(f"  • {dep}")
-        print("\nTo enable Claude Code integration, install from:")
-        print("  https://github.com/anthropics/claude-code")
-    
+        for name in missing_optional:
+            print(f"  • {name} — {checker.dependencies[name].get_install_instructions()}")
+
     return all_satisfied, status
+
+def _check_ollama_server_running(timeout: int = 3) -> bool:
+    """
+    Check whether the Ollama server is reachable via its health endpoint.
+
+    Uses a plain HTTP request with a short timeout — no subprocess involved,
+    so it cannot hang due to child process pipe issues.
+
+    Args:
+        timeout: Seconds to wait before giving up.
+
+    Returns:
+        True if the server responded, False otherwise.
+    """
+    try:
+        urllib.request.urlopen(f"{OLLAMA_API_BASE}/api/tags", timeout=timeout)
+        return True
+    except urllib.error.URLError:
+        return False
+    except Exception:
+        return False
 
 def check_models() -> Tuple[bool, List[str]]:
     """
@@ -122,6 +109,12 @@ def check_models() -> Tuple[bool, List[str]]:
     print("\n🤖 Checking Models")
     print("-" * 50)
     
+    if not _check_ollama_server_running():
+        print("⚠ Ollama server is not running — cannot list models")
+        print("  Start it with:  ollama serve")
+        logger.warning("Ollama server unreachable at %s", OLLAMA_API_BASE)
+        return False, []
+
     try:
         result = subprocess.run(
             ["ollama", "list"],
@@ -135,7 +128,6 @@ def check_models() -> Tuple[bool, List[str]]:
             logger.warning(f"Ollama list failed: {result.stderr}")
             return False, []
         
-        # Parse model list
         models = []
         if result.stdout:
             lines = result.stdout.strip().split('\n')[1:]  # Skip header
@@ -226,8 +218,13 @@ def full_diagnostic() -> bool:
     print("=" * 50)
     
     deps_ok, dep_status = check_dependencies()
+    print("\n**DEPENDENCIES CHECK COMPLETE**")
+    print("\n" + "=" * 50)
     models_ok, models = check_models()
+    print("\n**MODELS CHECK COMPLETE**")
+    print("\n" + "=" * 50)
     mcp_ok, mcp_config = check_mcp()
+    print("\n**MCP CHECK COMPLETE**")
     
     # Summary
     print("\n" + "=" * 50)

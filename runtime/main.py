@@ -3,7 +3,7 @@ import sys
 import logging
 from typing import Optional
 
-from .ollama_service import start_ollama, stop_ollama
+from ollama_service import start_ollama, stop_ollama
 from session import stop_session, get_status
 from models import start_model, stop_model, build_model
 from doctor import full_diagnostic
@@ -110,36 +110,44 @@ def handle_stop(args: list) -> None:
         print(f"✗ Error: {e}")
         sys.exit(1)
 
-def handle_status():
+def handle_status() -> None:
+    """Handle the 'status' command."""
+    from hardware import print_hardware_report
 
     sessions = get_status()
 
-
     if not sessions:
-
         print("No active sessions")
-        return
+    else:
+        print("\nActive Sessions:")
 
+        for session in sessions:
 
-    print("\nActive Sessions:")
+            state = "RUNNING" if session["running"] else "STOPPED"
 
-    for session in sessions:
-
-        state = (
-            "RUNNING"
-            if session["running"]
-            else "STOPPED"
-        )
-
-        print(
-            f"""
-Name: {session['name']}
-Type: {session['type']}
-PID: {session['pid']}
-State: {state}
+            print(
+                f"""
+Name:    {session['name']}
+Type:    {session['type']}
+PID:     {session['pid']}
+State:   {state}
 Started: {session['started']}
 """
-        )
+            )
+
+    try:
+        from models import _context as ctx
+
+        if ctx is not None:
+            ctx.refresh_hardware()
+            print_hardware_report(ctx.hardware_profile, ctx.model_recommendation)
+        else:
+            from hardware import detect_hardware, recommend_model
+            profile = detect_hardware()
+            print_hardware_report(profile, recommend_model(profile))
+
+    except Exception as e:
+        logger.warning(f"Could not display hardware report: {e}")
 
 def handle_build(args: list) -> None:
     """Handle the 'build' command."""
@@ -169,10 +177,14 @@ def handle_doctor():
     print("=" * 50)
     
     try:
-        full_diagnostic()
-        logger.info("Diagnostic checks completed successfully")
+        status = full_diagnostic()
         print("=" * 50)
-        print("✓ All checks passed")
+        if status:
+            print("✓ All checks passed")
+            logger.info("Diagnostic checks completed successfully")
+        else:
+            print("✗ Some checks failed")
+            logger.warning("Diagnostic checks completed with issues")
         
     except Exception as e:
         logger.error(f"Diagnostic check failed: {e}")
@@ -238,12 +250,46 @@ def main() -> int:
         Exit code (0 for success, non-zero for failure)
     """
     # Show help if no arguments
-    if len(sys.argv) < 2:  # <- VALIDATION
+    if len(sys.argv) < 2:
         print_help()
         return 0
     
-    command = sys.argv[1].lower()
-    args = sys.argv[2:]  # <- SAFE SLICING
+    # --root is a suggestion only — context.startup() still prompts for confirmation
+    raw_args = sys.argv[1:]
+    suggested_root = None
+
+    if "--root" in raw_args:
+        idx = raw_args.index("--root")
+        if idx + 1 < len(raw_args):
+            suggested_root = raw_args[idx + 1]
+            raw_args = raw_args[:idx] + raw_args[idx + 2:]
+        else:
+            print("✗ --root requires a path argument")
+            return 1
+
+    command = raw_args[0].lower() if raw_args else ""
+    args = raw_args[1:]
+
+    ctx = None
+    # Initialize runtime context and bind it to models
+    try:
+        from context import RuntimeContext
+        from models import set_context
+        from pathlib import Path
+
+        ctx = RuntimeContext(project_name="LocalAIRuntime")
+        started = ctx.startup(
+            suggested_host=Path(suggested_root) if suggested_root else None
+        )
+
+        if not started:
+            return 1
+
+        set_context(ctx)
+
+    except Exception as e:
+        logger.warning(f"RuntimeContext unavailable, continuing without it: {e}")
+        ctx = None
     
     try:
         if command == "start":

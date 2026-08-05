@@ -30,13 +30,13 @@ def get_session(name):
 
     return _sessions.get(name)
 
+def get_session_by_pid(pid):
+    for session in _sessions.values():
+        if session.process.pid == pid:
+            return session
+    return None
 
-def create_session(
-    name,
-    process,
-    session_type,
-    metadata=None
-):
+def create_session(name, process, session_type, metadata=None):
 
     session = Session(
         name=name,
@@ -45,7 +45,6 @@ def create_session(
         metadata=metadata or {},
         started_at=datetime.now()
     )
-
 
     _sessions[name] = session
 
@@ -83,6 +82,5 @@ def stop_session(name):
 
     return True
 
-def get_session(pid):
-    # Logic to retrieve a session by its process ID
-    pass
+def get_all_sessions():
+    return dict(_sessions)
