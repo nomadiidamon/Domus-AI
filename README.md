@@ -40,15 +40,15 @@ The actions, tools and workflows of the Lares. Handles no intelligence, thought 
 
 ## Dependencies
 ### Required Dependencies
-- Python: \t\t The primary programming language for running the runtime. Developed with python version 3.14.6
-- Ollama: \t\t The primary runtime backend for running local AI models. Ensure you have the latest version installed.
+- Python: The primary programming language for running the runtime. Developed with python version 3.14.6
+- Ollama: The primary runtime backend for running local AI models. Ensure you have the latest version installed.
 
 ### Required Python Packages
-- psutil: \t\t v5.9.0 (or greater) for CPU, RAM, and GPU usage monitoring
-- packaging: \t\t v23.0 (or greater) for version comparison in dependency checks
-- nvidia-ml-py: \t\t v12.0.0 (or greater) for GPU monitoring (if using NVIDIA GPUs)
+- psutil: v5.9.0 (or greater) for CPU, RAM, and GPU usage monitoring
+- packaging: v23.0 (or greater) for version comparison in dependency checks
+- nvidia-ml-py: v12.0.0 (or greater) for GPU monitoring (if using NVIDIA GPUs)
 
 ### Optional Dependencies
-- Claude Code: \t\t For Claude models, or direct integration with Claude Code's CLI if desired.
+- Claude Code: For Claude models, or direct integration with Claude Code's CLI if desired.
 
 -----------------------------------------------------
