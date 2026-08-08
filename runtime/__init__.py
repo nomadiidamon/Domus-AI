@@ -14,27 +14,27 @@ __author__ = "Domus-AI Contributors"
 
 
 
-from runtime.ollama_service import (
+from .ollama_service import (
     start_ollama,
     stop_ollama,
 )
 
-from runtime.models import (
+from .models import (
     start_model,
     stop_model,
 )
 
-from runtime.claude_service import (
+from .claude_service import (
     ollama_launch_claude,
     stop_claude,
 )
 
-from runtime.session import (
+from .session import (
     get_status,
     stop_session,
 )
 
-from runtime.doctor import (
+from .doctor import (
     full_diagnostic,
 )
 

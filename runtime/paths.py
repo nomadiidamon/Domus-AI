@@ -1,4 +1,4 @@
-﻿# Determines pathing in the project. Util for finding the root of the project and other pathing needs.
+# Determines pathing in the project. Util for finding the root of the project and other pathing needs.
 import os
 from pathlib import Path
 

@@ -1,3 +1,4 @@
 __pycache__/
+Hestia/__pycache__/
 *.pyc
 scripts/.smoke_test_output/

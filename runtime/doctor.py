@@ -1,4 +1,4 @@
-﻿# Checks for all needed dependencies: Python, Ollama, Claude, Git, Models, MCP validation, and more. If any dependencies are missing, it will prompt the user to install them.
+# Checks for all needed dependencies: Python, Ollama, Claude, Git, Models, MCP validation, and more. If any dependencies are missing, it will prompt the user to install them.
 
 import subprocess
 import logging
@@ -26,6 +26,7 @@ def _build_checker() -> DependencyChecker:
         SystemCommandDependency("claude",  required=False, description="Claude Code (optional)"),
         PythonPackageDependency("psutil",  required=True,  description="System monitoring"),
         PythonPackageDependency("pynvml",  required=True, description="NVIDIA GPU monitoring (required only for NVIDIA GPUs)"),
+        PythonPackageDependency("python-dotenv", required=True, description="Environment variable management")
     ])
 
     return checker

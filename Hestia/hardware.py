@@ -1,4 +1,4 @@
-﻿# Monitors the hardware type and logs usage statistics
+# Monitors the hardware type and logs usage statistics
 # psutil is a cross-platform library for retrieving information on running processes and system utilization (CPU, memory, disks, network, sensors) in Python.
 # pynvml is a Python binding for the NVIDIA Management Library (NVML), which allows you to query GPU information and monitor GPU usage.
 # Other gpu libraries can be used to monitor GPU usage for non-NVIDIA GPUs.
@@ -21,27 +21,11 @@ from enum import Enum
 from typing import Optional, List, Dict, Tuple
 from pathlib import Path
 
+from .types import AcceleratorType, ModelSize
+from .model_catalog import MODEL_DATABASE
+
 logger = logging.getLogger(__name__)
 
-
-class AcceleratorType(Enum):
-    """Supported hardware accelerators."""
-    NONE = "none"
-    NVIDIA_CUDA = "nvidia_cuda"
-    NVIDIA_MPS = "nvidia_mps"
-    AMD_ROCM = "amd_rocm"
-    INTEL_ONEAPI = "intel_oneapi"
-    APPLE_METAL = "apple_metal"
-    QUALCOMM_HEXAGON = "qualcomm_hexagon"
-
-
-class ModelSize(Enum):
-    """Model size categories based on parameter count."""
-    TINY = "tiny"  # <1B parameters
-    SMALL = "small"  # 1-7B parameters
-    MEDIUM = "medium"  # 7-13B parameters
-    LARGE = "large"  # 13-40B parameters
-    XLARGE = "xlarge"  # 40B+ parameters
 
 
 @dataclass
@@ -102,6 +86,7 @@ class ModelRecommendation:
     recommended_models: List[str]
     thinking_models: List[str]
     tool_models: List[str]
+    vision_models: List[str] 
     max_context_tokens: int
     quantization_level: str
     batch_size: int
@@ -609,13 +594,13 @@ class ModelRecommender:
     def recommend(self) -> ModelRecommendation:
         """Recommend a model configuration based on available hardware."""
         
-        from runtime.model_catalog import get_tier, get_category
+        from .model_catalog import get_tier, get_category
 
         model_size = self._determine_model_size()
         accelerator = self.profile.primary_accelerator
         tier = get_tier(accelerator, model_size)
-
-        db = self.MODEL_DATABASE.get(accelerator, {})
+    
+        db = MODEL_DATABASE.get(accelerator, {})
         rec_data = db.get(model_size)
 
         return ModelRecommendation(

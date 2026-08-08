@@ -1,4 +1,4 @@
-﻿# Handles the current state of the runtime environment, including hardware specifications, project and working directories and AI memory.
+# Handles the current state of the runtime environment, including hardware specifications, project and working directories and AI memory.
 
 """
 context.py - Runtime context and state management for Local AI Runtime.
@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 import threading
 
-from .hardware import (
+from Hestia.hardware import (
     HardwareProfile, HardwareDetector, ModelRecommender, ModelRecommendation,
     AcceleratorType, ModelSize
 )
@@ -393,13 +393,13 @@ class RuntimeContext:
 
             if self.hardware_profile is None:
                 self.hardware_profile = previous
-                logger.warning("Hardware refresh failed — retaining previous profile")
+                logger.warning("Hardware refresh failed - retaining previous profile")
                 return False
 
             if previous is not None:
                 logger.info(
-                    f"Hardware refreshed — RAM available: "
-                    f"{previous.ram_available_gb:.1f}GB → "
+                    f"Hardware refreshed - RAM available: "
+                    f"{previous.ram_available_gb:.1f}GB -> "
                     f"{self.hardware_profile.ram_available_gb:.1f}GB"
                 )
 

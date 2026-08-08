@@ -1,4 +1,4 @@
-﻿# Handles installing dependencies. Ollama Installed? Claude Code Installed? Python Installed? Git Installed?
+# Handles installing dependencies. Ollama Installed? Claude Code Installed? Python Installed? Git Installed?
 # Called from install.py in root directory.
 
 """

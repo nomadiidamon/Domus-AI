@@ -109,14 +109,14 @@ def check_config_loads():
 
 
 def check_hardware_detection():
-    from runtime.hardware import detect_hardware
+    from Hestia.hardware import detect_hardware
     profile = detect_hardware()
     assert profile is not None
     return f"accelerator={getattr(profile, 'accelerator', '?')}"
 
 
 def check_model_catalog_import():
-    import runtime.model_catalog  # noqa: F401
+    import Hestia.model_catalog  # noqa: F401
     return "imported ok"
 
 
@@ -257,8 +257,8 @@ def check_full_diagnostic():
 CORE_CHECKS = [
     ("paths.find_root / get_config_dir", check_paths_resolve),
     ("config.* loads config/*.json", check_config_loads),
-    ("hardware.detect_hardware", check_hardware_detection),
-    ("model_catalog imports", check_model_catalog_import),
+    ("Hestia.hardware.detect_hardware", check_hardware_detection),
+    ("Hestia.model_catalog imports", check_model_catalog_import),
     ("dependencies.DependencyChecker", check_dependencies_module),
     ("session create/get/stop cycle", check_session_lifecycle),
     ("context module imports", check_context_module),
@@ -286,6 +286,21 @@ def main():
     print(f"Runtime dir:  {RUNTIME_DIR}")
     print(f"Test output:  {TEST_OUTPUT_DIR} (isolated, wiped each run)")
     print("-" * 60)
+
+    # Stale __pycache__ from before a restructure step can shadow current
+    # source (Python may load an old .pyc instead of recompiling), causing
+    # confusing failures that don't reproduce after a clean checkout. Since
+    # this repo is under active restructuring, clear caches every run so
+    # failures always reflect the current source on disk.
+    cleared = []
+    for pycache in PROJECT_ROOT.rglob("__pycache__"):
+        if TEST_OUTPUT_DIR in pycache.parents:
+            continue
+        shutil.rmtree(pycache, ignore_errors=True)
+        cleared.append(str(pycache))
+    if cleared:
+        print(f"Cleared {len(cleared)} stale __pycache__ dir(s) before running")
+        print("-" * 60)
 
     # Start every run from a clean, isolated output directory so nothing
     # leaks into the real project and nothing from a previous run leaks in.
@@ -319,3 +334,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+    

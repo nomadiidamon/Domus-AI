@@ -1,4 +1,4 @@
-﻿"""
+"""
 dependencies.py - Dependency management and health checking system.
 
 Provides a framework for checking, validating, and repairing system dependencies.

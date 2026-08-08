@@ -36,7 +36,7 @@ Category keys per tier entry:
 """
 
 from typing import Dict, List
-from runtime.hardware import AcceleratorType, ModelSize, ModelRecommendation
+from .hardware import AcceleratorType, ModelSize
 
 
 # ---------------------------------------------------------------------------

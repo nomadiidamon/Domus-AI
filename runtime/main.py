@@ -1,12 +1,12 @@
-﻿# Handles all AI Runtime commands. Should be the main entry point for the CLI.
+# Handles all AI Runtime commands. Should be the main entry point for the CLI.
 import sys
 import logging
 from typing import Optional
 
-from runtime.ollama_service import start_ollama, stop_ollama
-from runtime.session import stop_session, get_status
-from runtime.models import start_model, stop_model, build_model
-from runtime.doctor import full_diagnostic
+from .ollama_service import start_ollama, stop_ollama
+from .session import stop_session, get_status
+from .models import start_model, stop_model, build_model
+from .doctor import full_diagnostic
 
 # Configure logging
 logging.basicConfig(
@@ -73,15 +73,15 @@ def handle_start(args: list) -> None:
         # Now start the model
         start_model(model)
         logger.info(f"Model '{model}' started successfully")
-        print(f"✓ Model '{model}' is running")  # <- USER FEEDBACK
+        print(f"? Model '{model}' is running")  # <- USER FEEDBACK
         
     except RuntimeError as e:
         logger.error(f"Failed to start model: {e}")
-        print(f"✗ Error: {e}")
+        print(f"? Error: {e}")
         sys.exit(1)
     except Exception as e:
         logger.error(f"Unexpected error starting model: {e}")
-        print(f"✗ Unexpected error: {e}")
+        print(f"? Unexpected error: {e}")
         sys.exit(1)
        
 def handle_stop(args: list) -> None:
@@ -93,26 +93,26 @@ def handle_stop(args: list) -> None:
             logger.info(f"Stopping model: {model}")
             if stop_model(model):
                 logger.info(f"Model '{model}' stopped successfully")
-                print(f"✓ Model '{model}' stopped")
+                print(f"? Model '{model}' stopped")
             else:
                 logger.warning(f"Model '{model}' was not running")
-                print(f"⚠ Model '{model}' was not running")
+                print(f"? Model '{model}' was not running")
         else:
             # Stop all models and server
             logger.info("Stopping all models and Ollama server")
             stop_session()
             stop_ollama()
             logger.info("All models stopped")
-            print("✓ All models and Ollama server stopped")
+            print("? All models and Ollama server stopped")
             
     except Exception as e:
         logger.error(f"Error stopping model: {e}")
-        print(f"✗ Error: {e}")
+        print(f"? Error: {e}")
         sys.exit(1)
 
 def handle_status() -> None:
     """Handle the 'status' command."""
-    from runtime.hardware import print_hardware_report
+    from Hestia.hardware import print_hardware_report
 
     sessions = get_status()
 
@@ -142,7 +142,7 @@ Started: {session['started']}
             ctx.refresh_hardware()
             print_hardware_report(ctx.hardware_profile, ctx.model_recommendation)
         else:
-            from runtime.hardware import detect_hardware, recommend_model
+            from Hestia.hardware import detect_hardware, recommend_model
             profile = detect_hardware()
             print_hardware_report(profile, recommend_model(profile))
 
@@ -163,32 +163,32 @@ def handle_build(args: list) -> None:
     try:
         build_model(model)
         logger.info(f"Model '{model}' built successfully")
-        print(f"✓ Model '{model}' built successfully")
+        print(f"? Model '{model}' built successfully")
         
     except Exception as e:
         logger.error(f"Failed to build model: {e}")
-        print(f"✗ Error: {e}")
+        print(f"? Error: {e}")
         sys.exit(1)
 
 def handle_doctor():
     """Handle the 'doctor' command."""
     logger.info("Running diagnostic checks...")
-    print("\n🔍 Running diagnostic checks...")
+    print("\n?? Running diagnostic checks...")
     print("=" * 50)
     
     try:
         status = full_diagnostic()
         print("=" * 50)
         if status:
-            print("✓ All checks passed")
+            print("? All checks passed")
             logger.info("Diagnostic checks completed successfully")
         else:
-            print("✗ Some checks failed")
+            print("? Some checks failed")
             logger.warning("Diagnostic checks completed with issues")
         
     except Exception as e:
         logger.error(f"Diagnostic check failed: {e}")
-        print(f"✗ Error: {e}")
+        print(f"? Error: {e}")
         sys.exit(1)
 
 def handle_mcp(args: list) -> None:
@@ -205,7 +205,7 @@ def handle_mcp(args: list) -> None:
     if action == "launch":
         handle_mcp_launch(args[1:])
     else:
-        print(f"⚠ MCP functionality not yet fully implemented: {action}")
+        print(f"? MCP functionality not yet fully implemented: {action}")
         # TODO: Implement other MCP functionality
  
 def handle_mcp_launch(args: list) -> None:
@@ -224,22 +224,22 @@ def handle_mcp_launch(args: list) -> None:
         from runtime.claude_service import ollama_launch_claude
         
         logger.info(f"Launching Claude Code with model: {model}")
-        print(f"🚀 Launching Claude Code with model: {model}")
+        print(f"?? Launching Claude Code with model: {model}")
         print("   See: https://docs.ollama.com/integrations/claude-code")
         
         process = ollama_launch_claude(model, auto_yes=auto_yes)
         
         logger.info(f"Claude Code launched (PID: {process.pid})")
-        print(f"✓ Claude Code is running (PID: {process.pid})")
+        print(f"? Claude Code is running (PID: {process.pid})")
         print("   You can now use Claude Code in your terminal!")
         
     except RuntimeError as e:
         logger.error(f"Failed to launch Claude Code: {e}")
-        print(f"✗ Error: {e}")
+        print(f"? Error: {e}")
         sys.exit(1)
     except Exception as e:
         logger.error(f"Unexpected error launching Claude Code: {e}")
-        print(f"✗ Unexpected error: {e}")
+        print(f"? Unexpected error: {e}")
         sys.exit(1)
 
 def main() -> int:
@@ -254,7 +254,7 @@ def main() -> int:
         print_help()
         return 0
     
-    # --root is a suggestion only — context.startup() still prompts for confirmation
+    # --root is a suggestion only - context.startup() still prompts for confirmation
     raw_args = sys.argv[1:]
     suggested_root = None
 
@@ -264,7 +264,7 @@ def main() -> int:
             suggested_root = raw_args[idx + 1]
             raw_args = raw_args[:idx] + raw_args[idx + 2:]
         else:
-            print("✗ --root requires a path argument")
+            print("? --root requires a path argument")
             return 1
 
     command = raw_args[0].lower() if raw_args else ""
@@ -308,7 +308,7 @@ def main() -> int:
             print_help()
         else:
             logger.error(f"Unknown command: {command}")
-            print(f"✗ Unknown command: '{command}'")
+            print(f"? Unknown command: '{command}'")
             print("\nRun 'python main.py help' for usage information")
             return 1  # <- PROPER EXIT CODE
         
@@ -316,11 +316,11 @@ def main() -> int:
         
     except KeyboardInterrupt:
         logger.info("Operation cancelled by user")
-        print("\n⚠ Operation cancelled")
+        print("\n? Operation cancelled")
         return 1  # <- GRACEFUL Ctrl+C
     except Exception as e:
         logger.critical(f"Unexpected error in main: {e}", exc_info=True)
-        print(f"\n✗ Unexpected error: {e}")
+        print(f"\n? Unexpected error: {e}")
         return 1
 
 if __name__ == "__main__":
