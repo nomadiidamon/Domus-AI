@@ -23,12 +23,13 @@ import shutil
 import traceback
 from pathlib import Path
 
-# Make `runtime` importable as a package regardless of where this script is
-# invoked from. As of Step 1, runtime/ has a real __init__.py and its modules
-# use relative imports, so we add the PROJECT ROOT (not runtime/ itself) to
-# sys.path and import submodules as `runtime.xxx`.
-# During later restructure steps this is the ONE section you'll update as
-# modules move into Janus/, Hestia/, etc.
+# Make the project's top-level packages (runtime, Hestia, Janus, ...)
+# importable regardless of where this script is invoked from, by adding
+# the PROJECT ROOT (not any subpackage dir) to sys.path. Each subpackage
+# has its own __init__.py and uses relative imports internally; cross-
+# package imports (e.g. runtime/context.py importing Janus.paths) use
+# absolute imports since sibling packages can't use relative imports
+# across package boundaries.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -86,13 +87,13 @@ def run_check(result: Result, name: str, fn):
 
 def check_paths_resolve():
     """
-    find_root() locates the Domus-AI repo itself (via the .ai-runtime marker)
-    and is what config.py uses to find /config. get_config_dir(), by
+    find_root() locates the Domus-AI repo itself (via the .ai-runtime-marker
+    file) and is what config.py uses to find /config. get_config_dir(), by
     contrast, resolves the *host* project's config dir and requires
     initialize_host() to have been called first — that's a separate,
     stateful flow we don't exercise in a stateless smoke test.
     """
-    from runtime.paths import find_root
+    from Janus.paths import find_root
     root = find_root()
     assert root.exists(), f"root does not exist: {root}"
     config_dir = root / "config"
@@ -101,7 +102,7 @@ def check_paths_resolve():
 
 
 def check_config_loads():
-    from runtime import config
+    from Janus import config
     models = config.load_models_config()
     runtime_cfg = config.load_runtime_config()
     claude_cfg = config.load_claude_config()
@@ -158,7 +159,7 @@ def check_session_lifecycle():
 
 
 def check_dependencies_module():
-    from runtime.dependencies import DependencyChecker, PythonPackageDependency
+    from Janus.dependencies import DependencyChecker, PythonPackageDependency
     checker = DependencyChecker()
     checker.register_many([
         PythonPackageDependency("psutil", required=True, description="System monitoring"),
@@ -184,10 +185,11 @@ def check_mcp_stub():
 
 def check_cli_module_imports():
     """
-    main.py is the CLI entry point. Importing it only proves its top-level
-    imports resolve — it does NOT exercise lazy/inline imports inside its
-    functions (e.g. `from .context import ...` called only when a command
-    runs). So beyond importing, we also invoke it with the side-effect-free
+    Janus/main.py is the CLI entry point (invoked as `python -m Janus`).
+    Importing it only proves its top-level imports resolve — it does NOT
+    exercise lazy/inline imports inside its functions (e.g.
+    `from runtime.context import ...` called only when a command runs).
+    So beyond importing, we also invoke it with the side-effect-free
     "help" command via subprocess to catch import errors that only surface
     at call time.
 
@@ -198,7 +200,7 @@ def check_cli_module_imports():
     project root. We redirect it via LOCAL_AI_RUNTIME_HOST to an isolated,
     disposable directory under TEST_OUTPUT_DIR instead.
     """
-    from runtime import main  # noqa: F401
+    from Janus import main  # noqa: F401
     assert hasattr(main, "main")
 
     host_dir = TEST_OUTPUT_DIR / "host-project"
@@ -210,7 +212,7 @@ def check_cli_module_imports():
     import subprocess
     try:
         proc = subprocess.run(
-            [sys.executable, "-m", "runtime.main", "help"],
+            [sys.executable, "-m", "Janus", "help"],
             cwd=str(PROJECT_ROOT),
             capture_output=True,
             text=True,
@@ -249,25 +251,25 @@ def check_cli_module_imports():
 
 def check_full_diagnostic():
     """Opt-in: requires ollama/git/etc. to actually be installed on this machine."""
-    from runtime.doctor import full_diagnostic
+    from Janus.doctor import full_diagnostic
     ok = full_diagnostic()
     return f"full_diagnostic() returned {ok}"
 
 
 CORE_CHECKS = [
-    ("paths.find_root / get_config_dir", check_paths_resolve),
-    ("config.* loads config/*.json", check_config_loads),
+    ("Janus.paths.find_root", check_paths_resolve),
+    ("Janus.config.* loads config/*.json", check_config_loads),
     ("Hestia.hardware.detect_hardware", check_hardware_detection),
     ("Hestia.model_catalog imports", check_model_catalog_import),
-    ("dependencies.DependencyChecker", check_dependencies_module),
+    ("Janus.dependencies.DependencyChecker", check_dependencies_module),
     ("session create/get/stop cycle", check_session_lifecycle),
     ("context module imports", check_context_module),
     ("mcp.MCPManager stub imports", check_mcp_stub),
-    ("main.py CLI module imports", check_cli_module_imports),
+    ("Janus (python -m Janus) CLI", check_cli_module_imports),
 ]
 
 FULL_ONLY_CHECKS = [
-    ("doctor.full_diagnostic (real system check)", check_full_diagnostic),
+    ("Janus.doctor.full_diagnostic (real system check)", check_full_diagnostic),
 ]
 
 
@@ -334,4 +336,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-    

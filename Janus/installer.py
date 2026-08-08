@@ -19,7 +19,7 @@ import subprocess
 from pathlib import Path
 from typing import Tuple
 
-from runtime.dependencies import (
+from .dependencies import (
     DependencyChecker,
     DependencyStatus,
     PythonPackageDependency,
@@ -76,13 +76,6 @@ def _build_checker() -> DependencyChecker:
             min_version="12.0.0",
             required=True,
             description="NVIDIA GPU monitoring (required only for NVIDIA GPUs)",
-        ),
-        PythonPackageDependency(
-            "python-dotenv",
-            import_name="dotenv",
-            min_version="1.0.0",
-            required=True,
-            description=".env file support for config loading",
         ),
 
         # System commands
@@ -223,7 +216,7 @@ def _print_summary(all_ok: bool) -> None:
     if all_ok:
         print("✓ All required dependencies are satisfied.")
         print("✓ Local AI Runtime is ready to use.\n")
-        print("  Run:  python runtime/main.py help")
+        print("  Run:  python -m Janus help")
     else:
         print("✗ Some required dependencies could not be installed automatically.")
         print("  Please install the items marked ✗ above, then re-run:\n")

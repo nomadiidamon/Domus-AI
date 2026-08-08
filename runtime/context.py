@@ -267,9 +267,9 @@ class RuntimeContext:
         with self._lock:
             try:
                 # Confirm host project root before touching anything on disk
-                from .paths import initialize_host, ensure_host_dirs
-                from .paths import get_logs_dir, get_cache_dir, get_models_dir
-                from .paths import get_memory_dir, get_config_dir, get_sessions_dir
+                from Janus.paths import initialize_host, ensure_host_dirs
+                from Janus.paths import get_logs_dir, get_cache_dir, get_models_dir
+                from Janus.paths import get_memory_dir, get_config_dir, get_sessions_dir
 
                 host = initialize_host(
                     suggested=suggested_host,

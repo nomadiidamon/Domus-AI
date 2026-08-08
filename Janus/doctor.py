@@ -6,7 +6,7 @@ import urllib.request
 import urllib.error
 from typing import Dict, List, Tuple
 from pathlib import Path
-from runtime.dependencies import (
+from Janus.dependencies import (
     DependencyChecker, PythonPackageDependency,
     SystemCommandDependency, DependencyStatus
 )
@@ -26,7 +26,7 @@ def _build_checker() -> DependencyChecker:
         SystemCommandDependency("claude",  required=False, description="Claude Code (optional)"),
         PythonPackageDependency("psutil",  required=True,  description="System monitoring"),
         PythonPackageDependency("pynvml",  required=True, description="NVIDIA GPU monitoring (required only for NVIDIA GPUs)"),
-        PythonPackageDependency("python-dotenv", required=True, description="Environment variable management")
+        PythonPackageDependency("python-dotenv", import_name="dotenv", required=True, description="Environment variable management")
     ])
 
     return checker
@@ -167,7 +167,7 @@ def check_mcp() -> Tuple[bool, Dict]:
     print("-" * 50)
     
     try:
-        from runtime.paths import get_mcp_path
+        from Janus.paths import get_mcp_path
         
         mcp_path = get_mcp_path()
         config_file = mcp_path / "servers.json"

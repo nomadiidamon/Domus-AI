@@ -34,7 +34,7 @@ from .session import (
     stop_session,
 )
 
-from .doctor import (
+from Janus.doctor import (
     full_diagnostic,
 )
 
