@@ -79,6 +79,7 @@ def _build_checker() -> DependencyChecker:
         ),
         PythonPackageDependency(
             "python-dotenv",
+            import_name="dotenv",
             min_version="1.0.0",
             required=True,
             description=".env file support for config loading",

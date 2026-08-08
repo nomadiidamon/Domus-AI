@@ -122,10 +122,19 @@ class HardwareDetector:
         # Calculate available memory for models
         # Conservative estimate: use 70% of available RAM to leave headroom
         available_for_models = ram_info['available'] * 0.7
-        if gpus:
-            # Use smallest GPU's free memory as constraint
-            gpu_available = min(gpu.free_memory_gb for gpu in gpus)
-            available_for_models = min(available_for_models, gpu_available * 0.8)
+
+        usable_gpus = [
+            gpu for gpu in gpus
+            if gpu.accelerator == primary_accelerator
+            and gpu.is_available
+        ]
+
+        if usable_gpus:
+            gpu_available = min(gpu.free_memory_gb for gpu in usable_gpus)
+            available_for_models = min(
+                available_for_models,
+                gpu_available * 0.8,
+            )
         
         profile = HardwareProfile(
             cpu_count=cpu_count,
