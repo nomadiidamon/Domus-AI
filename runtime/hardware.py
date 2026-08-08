@@ -609,7 +609,7 @@ class ModelRecommender:
     def recommend(self) -> ModelRecommendation:
         """Recommend a model configuration based on available hardware."""
         
-        from model_catalog import get_tier, get_category
+        from runtime.model_catalog import get_tier, get_category
 
         model_size = self._determine_model_size()
         accelerator = self.profile.primary_accelerator

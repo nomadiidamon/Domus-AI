@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 import threading
 
-from hardware import (
+from .hardware import (
     HardwareProfile, HardwareDetector, ModelRecommender, ModelRecommendation,
     AcceleratorType, ModelSize
 )
@@ -161,28 +161,37 @@ class RuntimeContext:
         mode: RuntimeMode = RuntimeMode.DEVELOPMENT,
     ):
         """
-        Initialize runtime context.
-        
+        Initialize runtime context in memory only.
+
+        IMPORTANT: This does NOT touch disk and does NOT resolve the real
+        working directories. Directory resolution (via paths.py's host
+        project logic, honoring LOCAL_AI_RUNTIME_HOST) and directory
+        creation both happen in startup(), not here. Constructing a
+        RuntimeContext must be side-effect-free so it's always safe to
+        instantiate (e.g. in tests) without writing anywhere.
+
         Args:
             project_name: Name of the project
-            project_dir: Project root directory
+            project_dir: Project root directory (advisory only until
+                         startup() resolves the real host project root)
             mode: Operating mode for the runtime
         """
         self.project_name = project_name
         self.mode = mode
-        
-        # Setup directories
-        self.project_dir = Path(project_dir) if project_dir else Path.cwd()
-        self.working_dir = self.project_dir / "runtime"
-        self.cache_dir = self.working_dir / "cache"
-        self.logs_dir = self.working_dir / "logs"
-        self.models_dir = self.working_dir / "models"
-        self.memory_dir = self.working_dir / "memory"
-        self.config_dir = self.working_dir / "config"
-        
-        # Ensure directories exist
-        self._ensure_directories()
-        
+
+        # Directories are NOT resolved or created here. They remain None
+        # until startup() sets them via paths.py's host-project resolution.
+        # This avoids writing to disk (or guessing a wrong cwd-based path)
+        # merely from constructing the object.
+        self.project_dir: Optional[Path] = Path(project_dir) if project_dir else None
+        self.working_dir: Optional[Path] = None
+        self.cache_dir: Optional[Path] = None
+        self.logs_dir: Optional[Path] = None
+        self.models_dir: Optional[Path] = None
+        self.memory_dir: Optional[Path] = None
+        self.config_dir: Optional[Path] = None
+        self.sessions_dir: Optional[Path] = None
+
         # Initialize state
         self.config = ProjectConfig(name=project_name)
         self.ai_memory = AIMemory()
@@ -206,14 +215,16 @@ class RuntimeContext:
         
         # Thread safety
         self._lock = threading.RLock()
-        
-        # Setup logging
-        self._setup_logging()
-        
-        logger.info(f"RuntimeContext initialized for project: {project_name}")
+
+        # NOTE: logging setup is deferred to startup(), since it requires
+        # logs_dir to exist, which is only known once startup() resolves
+        # the host project root.
+
+        logger.info(f"RuntimeContext created in memory for project: {project_name} (call startup() to initialize directories)")
     
     def _ensure_directories(self):
-        """Ensure all required directories exist."""
+        """Ensure all required directories exist. Called by startup() only,
+        after paths.py has resolved the real host-project directories."""
         for dir_path in [
             self.project_dir,
             self.working_dir,
@@ -223,7 +234,8 @@ class RuntimeContext:
             self.memory_dir,
             self.config_dir,
         ]:
-            dir_path.mkdir(parents=True, exist_ok=True)
+            if dir_path is not None:
+                dir_path.mkdir(parents=True, exist_ok=True)
     
     def _setup_logging(self):
         """Setup logging for the context."""
@@ -255,9 +267,9 @@ class RuntimeContext:
         with self._lock:
             try:
                 # Confirm host project root before touching anything on disk
-                from paths import initialize_host, ensure_host_dirs
-                from paths import get_logs_dir, get_cache_dir, get_models_dir
-                from paths import get_memory_dir, get_config_dir, get_sessions_dir
+                from .paths import initialize_host, ensure_host_dirs
+                from .paths import get_logs_dir, get_cache_dir, get_models_dir
+                from .paths import get_memory_dir, get_config_dir, get_sessions_dir
 
                 host = initialize_host(
                     suggested=suggested_host,
@@ -555,7 +567,7 @@ class RuntimeContext:
         Returns:
             Dict mapping session names to their status snapshots
         """
-        from session import get_all_sessions
+        from .session import get_all_sessions
 
         sessions = get_all_sessions()
         result = {}

@@ -20,7 +20,7 @@ def _get_config_dir() -> Path:
     """Get the config directory path."""
     # Config should be relative to project root
     try:
-        from paths import find_root
+        from runtime.paths import find_root
         return find_root() / "config"
     except Exception:
         # Fallback: look for config directory relative to this file

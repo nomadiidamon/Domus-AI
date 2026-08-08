@@ -3,10 +3,10 @@ import sys
 import logging
 from typing import Optional
 
-from ollama_service import start_ollama, stop_ollama
-from session import stop_session, get_status
-from models import start_model, stop_model, build_model
-from doctor import full_diagnostic
+from runtime.ollama_service import start_ollama, stop_ollama
+from runtime.session import stop_session, get_status
+from runtime.models import start_model, stop_model, build_model
+from runtime.doctor import full_diagnostic
 
 # Configure logging
 logging.basicConfig(
@@ -112,7 +112,7 @@ def handle_stop(args: list) -> None:
 
 def handle_status() -> None:
     """Handle the 'status' command."""
-    from hardware import print_hardware_report
+    from runtime.hardware import print_hardware_report
 
     sessions = get_status()
 
@@ -136,13 +136,13 @@ Started: {session['started']}
             )
 
     try:
-        from models import _context as ctx
+        from runtime.models import _context as ctx
 
         if ctx is not None:
             ctx.refresh_hardware()
             print_hardware_report(ctx.hardware_profile, ctx.model_recommendation)
         else:
-            from hardware import detect_hardware, recommend_model
+            from runtime.hardware import detect_hardware, recommend_model
             profile = detect_hardware()
             print_hardware_report(profile, recommend_model(profile))
 
@@ -221,7 +221,7 @@ def handle_mcp_launch(args: list) -> None:
     auto_yes = "--yes" in args
     
     try:
-        from claude import ollama_launch_claude
+        from runtime.claude_service import ollama_launch_claude
         
         logger.info(f"Launching Claude Code with model: {model}")
         print(f"🚀 Launching Claude Code with model: {model}")
@@ -273,8 +273,8 @@ def main() -> int:
     ctx = None
     # Initialize runtime context and bind it to models
     try:
-        from context import RuntimeContext
-        from models import set_context
+        from runtime.context import RuntimeContext
+        from runtime.models import set_context
         from pathlib import Path
 
         ctx = RuntimeContext(project_name="LocalAIRuntime")

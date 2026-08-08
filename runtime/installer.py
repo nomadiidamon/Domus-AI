@@ -19,7 +19,7 @@ import subprocess
 from pathlib import Path
 from typing import Tuple
 
-from dependencies import (
+from runtime.dependencies import (
     DependencyChecker,
     DependencyStatus,
     PythonPackageDependency,

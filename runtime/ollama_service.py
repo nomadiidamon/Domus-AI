@@ -3,7 +3,7 @@ import subprocess
 import logging
 from typing import Optional
 import time
-from session import create_session, stop_session, get_session, remove_session
+from runtime.session import create_session, stop_session, get_session, remove_session
 
 def start_ollama():
     existing = get_session("ollama_server")

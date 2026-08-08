@@ -6,7 +6,7 @@ import subprocess
 import logging
 from typing import Optional
 
-from session import create_session, get_session, stop_session
+from runtime.session import create_session, get_session, stop_session
 
 
 logger = logging.getLogger(__name__)

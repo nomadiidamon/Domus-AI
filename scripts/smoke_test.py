@@ -17,17 +17,33 @@ Exit code: 0 if all checks pass, 1 otherwise. Safe to run on Windows/macOS/Linux
 """
 
 import sys
+import os
 import argparse
+import shutil
 import traceback
 from pathlib import Path
 
-# Make sure runtime/ is importable regardless of where this script is invoked from.
-# During the restructure this is the ONE line you may need to update as files move
-# (e.g. once things live under Janus/, Hestia/, etc. this changes to add those dirs).
+# Make `runtime` importable as a package regardless of where this script is
+# invoked from. As of Step 1, runtime/ has a real __init__.py and its modules
+# use relative imports, so we add the PROJECT ROOT (not runtime/ itself) to
+# sys.path and import submodules as `runtime.xxx`.
+# During later restructure steps this is the ONE section you'll update as
+# modules move into Janus/, Hestia/, etc.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 RUNTIME_DIR = PROJECT_ROOT / "runtime"
-if str(RUNTIME_DIR) not in sys.path:
-    sys.path.insert(0, str(RUNTIME_DIR))
+
+# All writable output this test needs (a fake "host project" dir, temp files,
+# etc.) goes here — NEVER inside PROJECT_ROOT or RUNTIME_DIR. Wiped clean at
+# the start of every run so tests stay isolated and repeatable.
+TEST_OUTPUT_DIR = Path(__file__).resolve().parent / ".smoke_test_output"
+
+
+def _tail(text: str, n: int = 800) -> str:
+    """Return the last n chars of text — tracebacks/errors print at the END
+    of output, so truncating from the front (as [:n] does) hides them."""
+    return text if len(text) <= n else "..." + text[-n:]
 
 
 class Result:
@@ -76,7 +92,7 @@ def check_paths_resolve():
     initialize_host() to have been called first — that's a separate,
     stateful flow we don't exercise in a stateless smoke test.
     """
-    from paths import find_root
+    from runtime.paths import find_root
     root = find_root()
     assert root.exists(), f"root does not exist: {root}"
     config_dir = root / "config"
@@ -85,7 +101,7 @@ def check_paths_resolve():
 
 
 def check_config_loads():
-    import config
+    from runtime import config
     models = config.load_models_config()
     runtime_cfg = config.load_runtime_config()
     claude_cfg = config.load_claude_config()
@@ -93,14 +109,14 @@ def check_config_loads():
 
 
 def check_hardware_detection():
-    from hardware import detect_hardware
+    from runtime.hardware import detect_hardware
     profile = detect_hardware()
     assert profile is not None
     return f"accelerator={getattr(profile, 'accelerator', '?')}"
 
 
 def check_model_catalog_import():
-    import model_catalog  # noqa: F401
+    import runtime.model_catalog  # noqa: F401
     return "imported ok"
 
 
@@ -111,7 +127,7 @@ def check_session_lifecycle():
     any OS. Uses a tiny fake process object matching the .poll()/.pid/
     .terminate() surface that session.py expects.
     """
-    from session import create_session, get_session, stop_session, get_all_sessions
+    from runtime.session import create_session, get_session, stop_session, get_all_sessions
 
     class FakeProcess:
         def __init__(self):
@@ -142,7 +158,7 @@ def check_session_lifecycle():
 
 
 def check_dependencies_module():
-    from dependencies import DependencyChecker, PythonPackageDependency
+    from runtime.dependencies import DependencyChecker, PythonPackageDependency
     checker = DependencyChecker()
     checker.register_many([
         PythonPackageDependency("psutil", required=True, description="System monitoring"),
@@ -154,32 +170,86 @@ def check_dependencies_module():
 
 def check_context_module():
     """context.py is state-heavy; just confirm it imports and constructs cleanly."""
-    import context
+    from runtime import context
     assert hasattr(context, "RuntimeContext")
     assert hasattr(context, "get_context")
     return "imported ok"
 
 
 def check_mcp_stub():
-    import mcp
+    from runtime import mcp
     assert hasattr(mcp, "MCPManager")
     return "imported ok"
 
 
 def check_cli_module_imports():
     """
-    main.py is the CLI entry point. We only check that it imports cleanly
-    (i.e. its own imports of ollama_service/session/models/doctor resolve)
-    — we do NOT call main() since that would parse sys.argv / start processes.
+    main.py is the CLI entry point. Importing it only proves its top-level
+    imports resolve — it does NOT exercise lazy/inline imports inside its
+    functions (e.g. `from .context import ...` called only when a command
+    runs). So beyond importing, we also invoke it with the side-effect-free
+    "help" command via subprocess to catch import errors that only surface
+    at call time.
+
+    IMPORTANT: running main.py triggers RuntimeContext.startup(), which
+    creates a .ai-runtime/ working directory (cache, logs, models, memory,
+    config, sessions) inside whatever it considers the "host project."
+    We must NEVER let that land inside this repo's own runtime/ folder or
+    project root. We redirect it via LOCAL_AI_RUNTIME_HOST to an isolated,
+    disposable directory under TEST_OUTPUT_DIR instead.
     """
-    import main  # noqa: F401
+    from runtime import main  # noqa: F401
     assert hasattr(main, "main")
-    return "imported ok"
+
+    host_dir = TEST_OUTPUT_DIR / "host-project"
+    host_dir.mkdir(parents=True, exist_ok=True)
+
+    env = dict(os.environ)
+    env["LOCAL_AI_RUNTIME_HOST"] = str(host_dir)
+
+    import subprocess
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "runtime.main", "help"],
+            cwd=str(PROJECT_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env=env,
+        )
+    except subprocess.TimeoutExpired as e:
+        out = (e.stdout or b"").decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
+        raise AssertionError(f"timed out (possible unhandled interactive prompt): {_tail(out)}")
+
+    combined = (proc.stdout or "") + (proc.stderr or "")
+    assert "No module named" not in combined, f"import error at call time: {_tail(combined)}"
+    assert proc.returncode == 0, f"exit code {proc.returncode}: {_tail(combined)}"
+
+    # Sanity check: confirm host output actually landed in the isolated
+    # test dir and NOT inside the real project. Checks both the proper
+    # ".ai-runtime" working-dir name AND the bare directory names
+    # (cache/logs/models/memory/config/sessions) in case some code path
+    # bypasses paths.py and writes them directly into project_dir.
+    suspects = ["cache", "logs", "models", "memory", "config", "sessions", ".ai-runtime"]
+    leaked = []
+    for base in (PROJECT_ROOT, RUNTIME_DIR):
+        for name in suspects:
+            candidate = base / name
+            # "config" and "models" legitimately exist as real project dirs;
+            # only flag them if they look freshly created by this test run
+            # (i.e. contain the host marker or known host subfolders).
+            if name in ("config", "models") and base == PROJECT_ROOT:
+                continue
+            if candidate.exists():
+                leaked.append(str(candidate))
+    assert not leaked, f"host directories leaked into the real project: {leaked}"
+
+    return f"imported ok; CLI ran with host redirected to {host_dir}"
 
 
 def check_full_diagnostic():
     """Opt-in: requires ollama/git/etc. to actually be installed on this machine."""
-    from doctor import full_diagnostic
+    from runtime.doctor import full_diagnostic
     ok = full_diagnostic()
     return f"full_diagnostic() returned {ok}"
 
@@ -214,7 +284,14 @@ def main():
     print(f"Domus-AI smoke test")
     print(f"Project root: {PROJECT_ROOT}")
     print(f"Runtime dir:  {RUNTIME_DIR}")
+    print(f"Test output:  {TEST_OUTPUT_DIR} (isolated, wiped each run)")
     print("-" * 60)
+
+    # Start every run from a clean, isolated output directory so nothing
+    # leaks into the real project and nothing from a previous run leaks in.
+    if TEST_OUTPUT_DIR.exists():
+        shutil.rmtree(TEST_OUTPUT_DIR)
+    TEST_OUTPUT_DIR.mkdir(parents=True)
 
     result = Result()
 

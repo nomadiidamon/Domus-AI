@@ -9,35 +9,35 @@ def find_root():
     """
     Find the root directory of the AI runtime project.
     
-    Searches for a .ai-runtime marker file starting from the current script
+    Searches for a .ai-runtime-marker file starting from the current script
     and working upward through parent directories.
     
     Returns:
         Path: Root directory of the AI runtime project
         
     Raises:
-        RuntimeError: If .ai-runtime marker file is not found
+        RuntimeError: If .ai-runtime-marker file is not found
     """
 
     env_root = os.environ.get("LOCAL_AI_RUNTIME_ROOT")
     if env_root:
         root = Path(env_root).resolve()
-        if not (root / ".ai-runtime").exists():
+        if not (root / ".ai-runtime-marker").exists():
             raise RuntimeError(
-                f"LOCAL_AI_RUNTIME_ROOT is set to '{root}' but no .ai-runtime marker was found there."
+                f"LOCAL_AI_RUNTIME_ROOT is set to '{root}' but no .ai-runtime-marker was found there."
             )
         return root
 
     current = Path(__file__).resolve()
 
     while current != current.parent:
-        if (current / ".ai-runtime").exists():
+        if (current / ".ai-runtime-marker").exists():
             return current
         current=current.parent
 
     raise RuntimeError(
         "AI runtime not found. Make sure you're running from within the Local-AI-Runtime project "
-        "and that a .ai-runtime marker file exists in the project root."
+        "and that a .ai-runtime-marker file exists in the project root."
     )
 
 # ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ _host_project_root: Path | None = None
 
 def set_host_project_root(path: str | Path) -> None:
     """
-    Set the host project root and ensure the .ai-runtime marker exists there.
+    Set the host project root and ensure the .ai-runtime-marker file exists there.
 
     Should only be called after the user has confirmed the location via
     initialize_host(). Do not call this directly from main.py.
@@ -116,7 +116,12 @@ def is_host_initialized() -> bool:
 # Host project paths  (writable, created inside the host project)
 # ---------------------------------------------------------------------------
 def get_ai_runtime_dir() -> Path:
-    """The .ai-runtime/ working directory inside the host project."""
+    """The .ai-runtime/ working directory inside the host project.
+
+    Note: this is a directory, distinct from the .ai-runtime-marker file
+    (a plain empty file) used both to mark the runtime's own repo root
+    (find_root()) and the host project root (_ensure_host_marker()).
+    """
     return get_host_project_root() / ".ai-runtime"
 
 def get_cache_dir() -> Path:
@@ -143,7 +148,7 @@ def get_sessions_dir() -> Path:
 # ---------------------------------------------------------------------------
 def _ensure_host_marker(path: Path) -> None:
     """
-    Ensure the .ai-runtime marker file exists at the given path.
+    Ensure the .ai-runtime-marker file exists at the given path.
     Creates it if missing. Raises if the path is not a valid directory.
 
     Args:
@@ -181,7 +186,7 @@ def _prompt_for_path(suggested: Path) -> Path:
     print("=" * 50)
     print(
         "The Local AI Runtime needs to know which project it is working inside.\n"
-        "A .ai-runtime marker and working directories will be created there.\n"
+        "A .ai-runtime-marker file and .ai-runtime/ working directory will be created there.\n"
     )
 
     while True:

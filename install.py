@@ -17,7 +17,7 @@ _runtime_dir = Path(__file__).resolve().parent / "runtime"
 if str(_runtime_dir) not in sys.path:
     sys.path.insert(0, str(_runtime_dir))
 
-from installer import run_install
+from runtime.installer import run_install
 
 
 def main() -> int:

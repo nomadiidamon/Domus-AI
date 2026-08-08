@@ -6,7 +6,7 @@ import urllib.request
 import urllib.error
 from typing import Dict, List, Tuple
 from pathlib import Path
-from dependencies import (
+from runtime.dependencies import (
     DependencyChecker, PythonPackageDependency,
     SystemCommandDependency, DependencyStatus
 )
@@ -166,7 +166,7 @@ def check_mcp() -> Tuple[bool, Dict]:
     print("-" * 50)
     
     try:
-        from paths import get_mcp_path
+        from runtime.paths import get_mcp_path
         
         mcp_path = get_mcp_path()
         config_file = mcp_path / "servers.json"
