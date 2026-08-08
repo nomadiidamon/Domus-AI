@@ -1,35 +1,35 @@
 # Local AI Runtime - Python Dependencies
 
 # ---------------------------------------------------------------------------
-# Core — required for all functionality
+# Core ï¿½ required for all functionality
 # ---------------------------------------------------------------------------
 psutil>=5.9.0                     # CPU, RAM, and process monitoring (hardware.py)
 packaging>=23.0                   # Version comparison in dependency checks (dependencies.py)
+python-dotenv>=1.0.0              # .env file support (planned for config loading)
 
 # ---------------------------------------------------------------------------
 # NVIDIA GPU support
 # nvidia-ml-py is the official NVIDIA package. pynvml is a deprecated fork.
-# Requires only the NVIDIA display driver — no CUDA toolkit needed.
+# Requires only the NVIDIA display driver ï¿½ no CUDA toolkit needed.
 # ---------------------------------------------------------------------------
 nvidia-ml-py>=12.0.0              # NVIDIA GPU detection and VRAM monitoring (hardware.py)
 
 # ---------------------------------------------------------------------------
 # AMD / Intel / Apple GPU support
-# No pip packages required — detected via system-native tools:
-#   AMD    — rocm-smi   (installed with the ROCm driver)
-#   Intel  — PowerShell WMI (Windows) / sysfs (Linux) — built-in OS tools
-#   Apple  — system_profiler (macOS built-in)
+# No pip packages required ï¿½ detected via system-native tools:
+#   AMD    ï¿½ rocm-smi   (installed with the ROCm driver)
+#   Intel  ï¿½ PowerShell WMI (Windows) / sysfs (Linux) ï¿½ built-in OS tools
+#   Apple  ï¿½ system_profiler (macOS built-in)
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Future / planned — not yet used in any runtime module
+# Future / planned ï¿½ not yet used in any runtime module
 # ---------------------------------------------------------------------------
-# python-dotenv>=1.0.0            # .env file support (planned for config loading)
 # requests>=2.28.0                # HTTP API calls (planned for remote model registry)
 # jsonschema>=4.0.0               # MCP config validation (planned for doctor.py)
 
 # ---------------------------------------------------------------------------
-# Development — uncomment when contributing
+# Development ï¿½ uncomment when contributing
 # ---------------------------------------------------------------------------
 # pytest>=7.0.0                   # Testing framework
 # pytest-cov>=4.0.0               # Code coverage

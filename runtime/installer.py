@@ -77,6 +77,12 @@ def _build_checker() -> DependencyChecker:
             required=True,
             description="NVIDIA GPU monitoring (required only for NVIDIA GPUs)",
         ),
+        PythonPackageDependency(
+            "python-dotenv",
+            min_version="1.0.0",
+            required=True,
+            description=".env file support for config loading",
+        ),
 
         # System commands
         SystemCommandDependency(

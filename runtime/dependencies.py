@@ -688,10 +688,11 @@ if __name__ == "__main__":
     checker.register(PythonPackageDependency("psutil", required=True))
     checker.register(PythonPackageDependency("requests", min_version="2.25.0", required=True))
     checker.register(SystemCommandDependency("python", required=True))
+    checker.register(PythonPackageDependency("python-dotenv", min_version="1.0.0", required=True))
     checker.register(SystemCommandDependency("git", required=False))
     checker.register(DirectoryDependency(Path.home() / ".cache" / "ai-runtime", create_if_missing=True))
     checker.register(EnvironmentVariableDependency("PATH", required=True))
-    
+
     # Check all dependencies
     print("Checking dependencies...\n")
     results = checker.check_all()
