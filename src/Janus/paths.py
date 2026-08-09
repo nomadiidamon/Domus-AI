@@ -57,7 +57,7 @@ def get_python_requirements_path():
     return root / "requirements.txt"
 
 
-_HOST_MARKER_NAME = ".ai-runtime-marker"
+_HOST_MARKER_NAME = ".domus-host-marker"
 
 # ---------------------------------------------------------------------------
 # Host project root  (where writable output goes — the project using this runtime)
@@ -66,7 +66,7 @@ _host_project_root: Path | None = None
 
 def set_host_project_root(path: str | Path) -> None:
     """
-    Set the host project root and ensure the .ai-runtime-marker file exists there.
+    Set the host project root and ensure the .domus-host-marker file exists there.
 
     Should only be called after the user has confirmed the location via
     initialize_host(). Do not call this directly from main.py.
@@ -117,13 +117,13 @@ def is_host_initialized() -> bool:
 # Host project paths  (writable, created inside the host project)
 # ---------------------------------------------------------------------------
 def get_ai_runtime_dir() -> Path:
-    """The .ai-runtime/ working directory inside the host project.
+    """The .domus-AI/ working directory inside the host project.
 
-    Note: this is a directory, distinct from the .ai-runtime-marker file
+    Note: this is a directory, distinct from the .domus-host-marker file
     (a plain empty file) used both to mark the runtime's own repo root
     (find_root()) and the host project root (_ensure_host_marker()).
     """
-    return get_host_project_root() / ".ai-runtime"
+    return get_host_project_root() / ".domus-AI"
 
 def get_cache_dir() -> Path:
     return get_ai_runtime_dir() / "cache"
@@ -149,7 +149,7 @@ def get_sessions_dir() -> Path:
 # ---------------------------------------------------------------------------
 def _ensure_host_marker(path: Path) -> None:
     """
-    Ensure the .ai-runtime-marker file exists at the given path.
+    Ensure the .domus-host-marker file exists at the given path.
     Creates it if missing. Raises if the path is not a valid directory.
 
     Args:
@@ -187,7 +187,7 @@ def _prompt_for_path(suggested: Path) -> Path:
     print("=" * 50)
     print(
         "The Local AI Runtime needs to know which project it is working inside.\n"
-        "A .ai-runtime-marker file and .ai-runtime/ working directory will be created there.\n"
+        "A .domus-host-marker file and .ai-runtime/ working directory will be created there.\n"
     )
 
     while True:
