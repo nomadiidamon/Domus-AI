@@ -71,15 +71,15 @@ def handle_start(args: list) -> None:
         # Now start the model
         start_model(model)
         logger.info(f"Model '{model}' started successfully")
-        print(f"✓ Model '{model}' is running")  # <- USER FEEDBACK
+        print(f"[OK] Model '{model}' is running")  # <- USER FEEDBACK
         
     except RuntimeError as e:
         logger.error(f"Failed to start model: {e}")
-        print(f"✗ Error: {e}")
+        print(f"[X] Error: {e}")
         sys.exit(1)
     except Exception as e:
         logger.error(f"Unexpected error starting model: {e}")
-        print(f"✗ Unexpected error: {e}")
+        print(f"[X] Unexpected error: {e}")
         sys.exit(1)
        
 def handle_stop(args: list) -> None:
@@ -91,10 +91,10 @@ def handle_stop(args: list) -> None:
             logger.info(f"Stopping model: {model}")
             if stop_model(model):
                 logger.info(f"Model '{model}' stopped successfully")
-                print(f"✓ Model '{model}' stopped")
+                print(f"[OK] Model '{model}' stopped")
             else:
                 logger.warning(f"Model '{model}' was not running")
-                print(f"⚠ Model '{model}' was not running")
+                print(f"[!] Model '{model}' was not running")
         else:
             # Stop all active sessions, then the Ollama server itself
             logger.info("Stopping all models and Ollama server")
@@ -102,11 +102,11 @@ def handle_stop(args: list) -> None:
                 stop_session(session_name)
             stop_ollama()
             logger.info("All models stopped")
-            print("✓ All models and Ollama server stopped")
+            print("[OK] All models and Ollama server stopped")
             
     except Exception as e:
         logger.error(f"Error stopping model: {e}")
-        print(f"✗ Error: {e}")
+        print(f"[X] Error: {e}")
         sys.exit(1)
 
 def handle_status() -> None:
@@ -162,32 +162,32 @@ def handle_build(args: list) -> None:
     try:
         build_model(model)
         logger.info(f"Model '{model}' built successfully")
-        print(f"✓ Model '{model}' built successfully")
+        print(f"[OK] Model '{model}' built successfully")
         
     except Exception as e:
         logger.error(f"Failed to build model: {e}")
-        print(f"✗ Error: {e}")
+        print(f"[X] Error: {e}")
         sys.exit(1)
 
 def handle_doctor():
     """Handle the 'doctor' command."""
     logger.info("Running diagnostic checks...")
-    print("\n🔍 Running diagnostic checks...")
+    print("\n[FIND] Running diagnostic checks...")
     print("=" * 50)
     
     try:
         status = full_diagnostic()
         print("=" * 50)
         if status:
-            print("✓ All checks passed")
+            print("[OK] All checks passed")
             logger.info("Diagnostic checks completed successfully")
         else:
-            print("✗ Some checks failed")
+            print("[X] Some checks failed")
             logger.warning("Diagnostic checks completed with issues")
         
     except Exception as e:
         logger.error(f"Diagnostic check failed: {e}")
-        print(f"✗ Error: {e}")
+        print(f"[X] Error: {e}")
         sys.exit(1)
 
 def handle_mcp(args: list) -> None:
@@ -204,7 +204,7 @@ def handle_mcp(args: list) -> None:
     if action == "launch":
         handle_mcp_launch(args[1:])
     else:
-        print(f"⚠ MCP functionality not yet fully implemented: {action}")
+        print(f"[!] MCP functionality not yet fully implemented: {action}")
         # TODO: Implement other MCP functionality
  
 def handle_mcp_launch(args: list) -> None:
@@ -223,22 +223,22 @@ def handle_mcp_launch(args: list) -> None:
         from Faber.claude_service import ollama_launch_claude
         
         logger.info(f"Launching Claude Code with model: {model}")
-        print(f"🚀 Launching Claude Code with model: {model}")
+        print(f"[LAUNCH] Launching Claude Code with model: {model}")
         print("   See: https://docs.ollama.com/integrations/claude-code")
         
         process = ollama_launch_claude(model, auto_yes=auto_yes)
         
         logger.info(f"Claude Code launched (PID: {process.pid})")
-        print(f"✓ Claude Code is running (PID: {process.pid})")
+        print(f"[OK] Claude Code is running (PID: {process.pid})")
         print("   You can now use Claude Code in your terminal!")
         
     except RuntimeError as e:
         logger.error(f"Failed to launch Claude Code: {e}")
-        print(f"✗ Error: {e}")
+        print(f"[X] Error: {e}")
         sys.exit(1)
     except Exception as e:
         logger.error(f"Unexpected error launching Claude Code: {e}")
-        print(f"✗ Unexpected error: {e}")
+        print(f"[X] Unexpected error: {e}")
         sys.exit(1)
 
 def main() -> int:
@@ -253,7 +253,7 @@ def main() -> int:
         print_help()
         return 0
     
-    # --root is a suggestion only — context.startup() still prompts for confirmation
+    # --root is a suggestion only - context.startup() still prompts for confirmation
     raw_args = sys.argv[1:]
     suggested_root = None
 
@@ -263,7 +263,7 @@ def main() -> int:
             suggested_root = raw_args[idx + 1]
             raw_args = raw_args[:idx] + raw_args[idx + 2:]
         else:
-            print("✗ --root requires a path argument")
+            print("[X] --root requires a path argument")
             return 1
 
     command = raw_args[0].lower() if raw_args else ""
@@ -309,7 +309,7 @@ def main() -> int:
                     handle_mcp(args)
                 else:
                     logger.error(f"Unknown command: {command}")
-                    print(f"✗ Unknown command: '{command}'")
+                    print(f"[X] Unknown command: '{command}'")
                     print("\nRun 'python -m Janus help' for usage information")
                     return 1  # <- PROPER EXIT CODE
                 
@@ -317,18 +317,18 @@ def main() -> int:
                 
             except KeyboardInterrupt:
                 logger.info("Operation cancelled by user")
-                print("\n⚠ Operation cancelled")
+                print("\n[!] Operation cancelled")
                 return 1  # <- GRACEFUL Ctrl+C
             except Exception as e:
                 logger.critical(f"Unexpected error in main: {e}", exc_info=True)
-                print(f"\n✗ Unexpected error: {e}")
+                print(f"\n[X] Unexpected error: {e}")
                 return 1
 
         return 0
 
     except Exception as e:
         logger.critical(f"Unexpected error in main: {e}", exc_info=True)
-        print(f"\n✗ Unexpected error: {e}")
+        print(f"\n[X] Unexpected error: {e}")
         return 1
 
 

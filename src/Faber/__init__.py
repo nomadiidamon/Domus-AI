@@ -2,7 +2,7 @@
 Faber - Agent actions subsystem for Domus-AI.
 
 The actions, tools and workflows executed on behalf of Lares. Handles no
-intelligence, thought, or planning — only facilitates actions and executes
+intelligence, thought, or planning - only facilitates actions and executes
 the work Lares (or the Janus CLI, until Lares exists) requests.
 
 Provides:

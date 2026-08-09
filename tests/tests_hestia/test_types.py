@@ -1,4 +1,4 @@
-"""Tests for Hestia/types.py — AcceleratorType and ModelSize enums."""
+"""Tests for Hestia/types.py - AcceleratorType and ModelSize enums."""
 
 import pytest
 
@@ -23,7 +23,7 @@ class TestAcceleratorType:
     def test_values(self, member, value):
         """
         Pin the string values since they're used as MODEL_DATABASE keys
-        (indirectly via the enum) and could appear in serialized JSON —
+        (indirectly via the enum) and could appear in serialized JSON -
         changing them silently would be a breaking change.
         """
         assert member.value == value

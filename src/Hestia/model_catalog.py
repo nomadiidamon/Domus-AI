@@ -25,14 +25,14 @@ Defines what models are appropriate per hardware tier, accelerator type,
 and capability category. Add new categories here without touching hardware.py.
 
 Category keys per tier entry:
-  models   — best general-purpose models for balanced use
-  thinking — chain-of-thought / extended reasoning (/think mode)
-  tools    — native function/tool-call support
-  vision   — multimodal image + text understanding
-  quantization — recommended quantization level for this tier
-  batch_size   — safe concurrent request count
-  context      — practical max context window in tokens
-  performance  — human-readable speed description
+  models   - best general-purpose models for balanced use
+  thinking - chain-of-thought / extended reasoning (/think mode)
+  tools    - native function/tool-call support
+  vision   - multimodal image + text understanding
+  quantization - recommended quantization level for this tier
+  batch_size   - safe concurrent request count
+  context      - practical max context window in tokens
+  performance  - human-readable speed description
 """
 
 from typing import Dict, List
@@ -56,12 +56,12 @@ MODEL_DATABASE: Dict[AcceleratorType, TierMap] = {
 
     # ==========================================================================
     # NVIDIA CUDA
-    # Fast VRAM access — highest quality quant per tier
+    # Fast VRAM access - highest quality quant per tier
     # ==========================================================================
     AcceleratorType.NVIDIA_CUDA: {
 
         ModelSize.TINY: {
-            # <2 GB — ultra-constrained, phone/edge-class VRAM
+            # <2 GB - ultra-constrained, phone/edge-class VRAM
             'models':      ['qwen3:0.6b', 'llama3.2:1b', 'deepseek-r1:1.5b', 'smollm2:1.7b'],
             'thinking':    ['deepseek-r1:1.5b', 'qwen3:0.6b'],
             'tools':       ['qwen3:0.6b', 'llama3.2:1b', 'smollm2:1.7b'],
@@ -73,7 +73,7 @@ MODEL_DATABASE: Dict[AcceleratorType, TierMap] = {
         },
 
         ModelSize.SMALL: {
-            # 2–4 GB — entry-level discrete GPU or shared VRAM laptop
+            # 2-4 GB - entry-level discrete GPU or shared VRAM laptop
             'models':      ['qwen3:1.7b', 'llama3.2:3b', 'phi4-mini:3.8b', 'granite3.3:2b'],
             'thinking':    ['qwen3:1.7b', 'deepseek-r1:1.5b'],
             'tools':       ['qwen3:1.7b', 'llama3.2:3b', 'granite3.1-dense:2b', 'xlam:1b'],
@@ -85,7 +85,7 @@ MODEL_DATABASE: Dict[AcceleratorType, TierMap] = {
         },
 
         ModelSize.MEDIUM: {
-            # 4–12 GB — GTX 1080 / RTX 3060 / RX 6700 XT class
+            # 4-12 GB - GTX 1080 / RTX 3060 / RX 6700 XT class
             'models':      ['qwen3:8b', 'llama3.1:8b', 'mistral:7b', 'mistral-nemo:12b', 'qwen2.5:7b'],
             'thinking':    ['qwen3:8b', 'deepseek-r1:8b', 'cogito:8b', 'exaone-deep:7.8b'],
             'tools':       ['qwen3:8b', 'llama3.1:8b', 'qwen2.5:7b', 'hermes3:8b',
@@ -99,7 +99,7 @@ MODEL_DATABASE: Dict[AcceleratorType, TierMap] = {
         },
 
         ModelSize.LARGE: {
-            # 12–40 GB — RTX 3090 / RTX 4090 / A100 40 GB class
+            # 12-40 GB - RTX 3090 / RTX 4090 / A100 40 GB class
             'models':      ['qwen3:14b', 'qwen3:32b', 'qwen2.5:32b',
                             'deepseek-r1:14b', 'command-r:35b'],
             'thinking':    ['qwen3:14b', 'qwen3:32b', 'deepseek-r1:14b', 'deepseek-r1:32b',
@@ -117,7 +117,7 @@ MODEL_DATABASE: Dict[AcceleratorType, TierMap] = {
         },
 
         ModelSize.XLARGE: {
-            # 40+ GB — A100 80 GB / H100 / multi-GPU NVLink
+            # 40+ GB - A100 80 GB / H100 / multi-GPU NVLink
             'models':      ['llama3.3:70b', 'qwen2.5:72b', 'qwen3:30b-a3b',
                             'deepseek-r1:70b', 'command-r-plus:104b'],
             'thinking':    ['deepseek-r1:70b', 'qwen3:30b-a3b', 'cogito:70b',
@@ -204,7 +204,7 @@ MODEL_DATABASE: Dict[AcceleratorType, TierMap] = {
 
     # ==========================================================================
     # Intel Arc / Xe (OneAPI)
-    # Typically 8–16 GB on Arc A770/B580; lower throughput than NVIDIA/AMD
+    # Typically 8-16 GB on Arc A770/B580; lower throughput than NVIDIA/AMD
     # ==========================================================================
     AcceleratorType.INTEL_ONEAPI: {
 
@@ -253,12 +253,12 @@ MODEL_DATABASE: Dict[AcceleratorType, TierMap] = {
             'performance':  'Slow',
         },
 
-        # XLARGE unrealistic for Arc — fallback to LARGE handled in ModelRecommender
+        # XLARGE unrealistic for Arc - fallback to LARGE handled in ModelRecommender
     },
 
     # ==========================================================================
-    # Apple Metal (Apple Silicon — unified memory)
-    # M1/M2/M3/M4 share RAM with GPU; 16–192 GB depending on config
+    # Apple Metal (Apple Silicon - unified memory)
+    # M1/M2/M3/M4 share RAM with GPU; 16-192 GB depending on config
     # Metal is highly optimised for Ollama via llama.cpp
     # ==========================================================================
     AcceleratorType.APPLE_METAL: {
@@ -299,7 +299,7 @@ MODEL_DATABASE: Dict[AcceleratorType, TierMap] = {
         },
 
         ModelSize.LARGE: {
-            # M2 Max / M3 Pro 36–48 GB unified memory
+            # M2 Max / M3 Pro 36-48 GB unified memory
             'models':      ['qwen3:14b', 'qwen3:32b', 'deepseek-r1:14b', 'command-r:35b'],
             'thinking':    ['qwen3:14b', 'qwen3:32b', 'deepseek-r1:14b', 'deepseek-r1:32b',
                             'qwq:32b', 'cogito:14b', 'phi4-reasoning:14b', 'exaone-deep:32b'],
@@ -314,7 +314,7 @@ MODEL_DATABASE: Dict[AcceleratorType, TierMap] = {
         },
 
         ModelSize.XLARGE: {
-            # M2 Ultra / M3 Max / M4 Max 64–192 GB unified memory
+            # M2 Ultra / M3 Max / M4 Max 64-192 GB unified memory
             'models':      ['llama3.3:70b', 'qwen2.5:72b', 'qwen3:30b-a3b', 'deepseek-r1:70b'],
             'thinking':    ['deepseek-r1:70b', 'qwen3:30b-a3b', 'cogito:70b',
                             'qwq:32b', 'exaone-deep:32b'],
@@ -330,7 +330,7 @@ MODEL_DATABASE: Dict[AcceleratorType, TierMap] = {
     },
 
     # ==========================================================================
-    # CPU only — no GPU
+    # CPU only - no GPU
     # ==========================================================================
     AcceleratorType.NONE: {
 
@@ -367,13 +367,13 @@ MODEL_DATABASE: Dict[AcceleratorType, TierMap] = {
             'performance':  'Very Slow (CPU only)',
         },
 
-        # LARGE / XLARGE on CPU-only is impractical — fallback handled in ModelRecommender
+        # LARGE / XLARGE on CPU-only is impractical - fallback handled in ModelRecommender
     },
 }
 
 
 # ---------------------------------------------------------------------------
-# Helpers — consumed by ModelRecommender in hardware.py
+# Helpers - consumed by ModelRecommender in hardware.py
 # ---------------------------------------------------------------------------
 
 # All categories present in any tier entry. Add new ones here as they are added

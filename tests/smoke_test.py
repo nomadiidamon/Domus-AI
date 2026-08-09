@@ -25,7 +25,7 @@ from pathlib import Path
 
 # Make the project's top-level packages (Hestia, Janus, Mentis, Faber,
 # Custos, Mercurius, Lares, DomusAPI, utils) importable regardless of
-# where this script is invoked from, by adding src/ to sys.path — that's
+# where this script is invoked from, by adding src/ to sys.path - that's
 # where all of them actually live. Each subpackage has its own __init__.py
 # and uses relative imports internally; cross-package imports (e.g.
 # Mentis/context.py importing Janus.paths) use absolute imports since
@@ -36,13 +36,13 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 # All writable output this test needs (a fake "host project" dir, temp files,
-# etc.) goes here — NEVER inside PROJECT_ROOT. Wiped clean at the start of
+# etc.) goes here - NEVER inside PROJECT_ROOT. Wiped clean at the start of
 # every run so tests stay isolated and repeatable.
 TEST_OUTPUT_DIR = Path(__file__).resolve().parent / ".smoke_test_output"
 
 
 def _tail(text: str, n: int = 800) -> str:
-    """Return the last n chars of text — tracebacks/errors print at the END
+    """Return the last n chars of text - tracebacks/errors print at the END
     of output, so truncating from the front (as [:n] does) hides them."""
     return text if len(text) <= n else "..." + text[-n:]
 
@@ -53,10 +53,10 @@ class Result:
 
     def record(self, name, passed, detail=""):
         self.checks.append((name, passed, detail))
-        icon = "✓" if passed else "✗"
+        icon = "[OK]" if passed else "[X]"
         line = f"{icon} {name}"
         if detail and (not passed or VERBOSE):
-            line += f" — {detail}"
+            line += f" - {detail}"
         print(line)
 
     @property
@@ -80,7 +80,7 @@ def run_check(result: Result, name: str, fn):
 
 
 # ---------------------------------------------------------------------------
-# Individual checks — each is a small, independent probe of one subsystem.
+# Individual checks - each is a small, independent probe of one subsystem.
 # Keep these mapped to current file responsibilities; update the import
 # lines (only) as files move during the restructure.
 # ---------------------------------------------------------------------------
@@ -90,7 +90,7 @@ def check_paths_resolve():
     find_root() locates the Domus-AI repo itself (via the .ai-runtime-marker
     file) and is what config.py uses to find /config. get_config_dir(), by
     contrast, resolves the *host* project's config dir and requires
-    initialize_host() to have been called first — that's a separate,
+    initialize_host() to have been called first - that's a separate,
     stateful flow we don't exercise in a stateless smoke test.
     """
     from Janus.paths import find_root
@@ -203,7 +203,7 @@ def check_mcp_stub():
 def check_stub_packages_import():
     """
     Mercurius (event bus), Lares (agents), and DomusAPI (top-level wrapper)
-    have no real implementation yet — this just confirms the package tree
+    have no real implementation yet - this just confirms the package tree
     itself is well-formed (each has a valid __init__.py) so the target
     structure holds together even before the real code lands.
     """
@@ -219,7 +219,7 @@ def check_stub_packages_import():
 def check_cli_module_imports():
     """
     Janus/main.py is the CLI entry point (invoked as `python -m Janus`).
-    Importing it only proves its top-level imports resolve — it does NOT
+    Importing it only proves its top-level imports resolve - it does NOT
     exercise lazy/inline imports inside its functions (e.g.
     `from Mentis.context import ...` called only when a command runs).
     So beyond importing, we also invoke it with the side-effect-free
@@ -227,7 +227,7 @@ def check_cli_module_imports():
     at call time.
 
     NOTE: this runs `python -m Janus` in a genuinely separate subprocess,
-    which does NOT inherit this script's own sys.path — so this check
+    which does NOT inherit this script's own sys.path - so this check
     fails with "No module named Janus" if src/ isn't reachable some other
     way. We set PYTHONPATH explicitly below so this works whether or not
     `pip install -e .` has been run yet.
@@ -248,7 +248,7 @@ def check_cli_module_imports():
     env = dict(os.environ)
     env["LOCAL_AI_RUNTIME_HOST"] = str(host_dir)
     # `python -m Janus` only resolves if src/ is on the subprocess's own
-    # PYTHONPATH — it does NOT inherit sys.path from this (parent) process.
+    # PYTHONPATH - it does NOT inherit sys.path from this (parent) process.
     # Normally `pip install -e .` (see pyproject.toml) puts src/ on the
     # path permanently; this covers the case where the package hasn't
     # been installed yet, so the smoke test doesn't depend on install

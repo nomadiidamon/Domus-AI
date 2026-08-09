@@ -56,7 +56,7 @@ class TestLoadModelsConfig:
 
         first = config.load_models_config()
 
-        # Mutate the file after the first load — cached call should NOT
+        # Mutate the file after the first load - cached call should NOT
         # pick up the change, demonstrating the cache is actually in effect.
         models_file.write_text(json.dumps({"B": {}}))
         second = config.load_models_config()

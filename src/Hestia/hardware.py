@@ -230,7 +230,7 @@ class HardwareDetector:
     def _detect_gpus(self) -> List[GPUInfo]:
         """
         Attempt detection of all GPU types.
-        Each detector is fully independent — failure in one does not affect others.
+        Each detector is fully independent - failure in one does not affect others.
         """
         gpus = []
         gpus.extend(self._detect_nvidia_gpus())
@@ -240,7 +240,7 @@ class HardwareDetector:
         return gpus
     
     # ------------------------------------------------------------------
-    # NVIDIA — via pynvml (pip install pynvml)
+    # NVIDIA - via pynvml (pip install pynvml)
     # Requires only the NVIDIA driver, not the full CUDA toolkit.
     # ------------------------------------------------------------------
     def _detect_nvidia_gpus(self) -> List[GPUInfo]:
@@ -287,14 +287,14 @@ class HardwareDetector:
             pynvml.nvmlShutdown()
 
         except ImportError:
-            self.logger.debug("pynvml not installed — skipping NVIDIA detection")
+            self.logger.debug("pynvml not installed - skipping NVIDIA detection")
         except Exception as e:
             self.logger.debug(f"NVIDIA GPU detection failed: {e}")
 
         return gpus
     
     # ------------------------------------------------------------------
-    # AMD — via rocm-smi system tool (installed with ROCm driver)
+    # AMD - via rocm-smi system tool (installed with ROCm driver)
     # No pip package required.
     # ------------------------------------------------------------------
     def _detect_amd_gpus(self) -> List[GPUInfo]:
@@ -302,7 +302,7 @@ class HardwareDetector:
         Detect AMD GPUs via rocm-smi.
 
         rocm-smi is installed alongside the AMD ROCm driver.
-        No pip package required — if ROCm is present, the tool is present.
+        No pip package required - if ROCm is present, the tool is present.
         """
         gpus = []
         try:
@@ -341,7 +341,7 @@ class HardwareDetector:
                 self.logger.info(f"Detected AMD GPU {i}: {name} ({total_gb:.1f}GB)")
 
         except FileNotFoundError:
-            self.logger.debug("rocm-smi not found — skipping AMD detection")
+            self.logger.debug("rocm-smi not found - skipping AMD detection")
         except Exception as e:
             self.logger.debug(f"AMD GPU detection failed: {e}")
 
@@ -366,7 +366,7 @@ class HardwareDetector:
         return None
     
     # ------------------------------------------------------------------
-    # Intel — via platform-native system tools
+    # Intel - via platform-native system tools
     # Windows: wmic / PowerShell   Linux: /sys/class/drm + lspci
     # No pip package required.
     # ------------------------------------------------------------------
@@ -431,7 +431,7 @@ class HardwareDetector:
                 self.logger.info(f"Detected Intel GPU {i}: {name} ({total_gb:.1f}GB)")
 
         except FileNotFoundError:
-            self.logger.debug("PowerShell not found — skipping Intel GPU detection")
+            self.logger.debug("PowerShell not found - skipping Intel GPU detection")
         except Exception as e:
             self.logger.debug(f"Intel GPU detection (Windows) failed: {e}")
 
@@ -497,14 +497,14 @@ class HardwareDetector:
             return None    
 
     # ------------------------------------------------------------------
-    # Apple — via system_profiler (macOS built-in)
+    # Apple - via system_profiler (macOS built-in)
     # No pip package required.
     # ------------------------------------------------------------------
     def _detect_apple_gpus(self) -> List[GPUInfo]:
         """
         Detect Apple GPU via system_profiler SPDisplaysDataType.
 
-        system_profiler is a macOS built-in tool — no pip package required.
+        system_profiler is a macOS built-in tool - no pip package required.
         Returns real VRAM figures for both discrete and Apple Silicon GPUs.
         """
         gpus = []
@@ -543,7 +543,7 @@ class HardwareDetector:
                 self.logger.info(f"Detected Apple GPU {i}: {name} ({total_gb:.1f}GB)")
 
         except FileNotFoundError:
-            self.logger.debug("system_profiler not found — skipping Apple GPU detection")
+            self.logger.debug("system_profiler not found - skipping Apple GPU detection")
         except Exception as e:
             self.logger.debug(f"Apple GPU detection failed: {e}")
 
@@ -592,7 +592,7 @@ class HardwareDetector:
 class ModelRecommender:
     """
     Recommend models based on hardware capabilities.
-    Model data lives in model_catalog.py — add new categories there.
+    Model data lives in model_catalog.py - add new categories there.
     """
     
     def __init__(self, profile: HardwareProfile):
@@ -689,7 +689,7 @@ def print_hardware_report(profile: HardwareProfile, recommendation: Optional[Mod
         recommendation: Optional model recommendation to display beneath hardware info.
     """
     print("\n" + "=" * 50)
-    print("💻 Hardware")
+    print("[SYS] Hardware")
     print("=" * 50)
 
     print(f"CPU:       {profile.cpu_brand}")
@@ -709,7 +709,7 @@ def print_hardware_report(profile: HardwareProfile, recommendation: Optional[Mod
             if gpu.driver_version:
                 print(f"       Driver:  {gpu.driver_version}")
     else:
-        print("\nGPU:       None detected — CPU only")
+        print("\nGPU:       None detected - CPU only")
 
     print(f"\nPlatform:  {profile.platform_name} {profile.platform_version}")
     print(f"Python:    {profile.python_version}")
@@ -718,7 +718,7 @@ def print_hardware_report(profile: HardwareProfile, recommendation: Optional[Mod
 
     if recommendation is not None:
         print("\n" + "=" * 50)
-        print("🤖 Model Recommendation")
+        print("[REC] Model Recommendation")
         print("=" * 50)
         print(f"Tier:         {recommendation.model_size.value}")
         print(f"Quantization: {recommendation.quantization_level}")

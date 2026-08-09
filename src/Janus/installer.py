@@ -9,7 +9,7 @@ and reports what still needs manual action. Called from install.py at the
 project root.
 
 Relies on DependencyChecker, PythonPackageDependency, and
-SystemCommandDependency from dependencies.py — no duplicate logic here.
+SystemCommandDependency from dependencies.py -- no duplicate logic here.
 """
 
 import sys
@@ -29,7 +29,7 @@ from .dependencies import (
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Manual install URLs — shown when auto-repair is not possible
+# Manual install URLs - shown when auto-repair is not possible
 # ---------------------------------------------------------------------------
 
 INSTALL_URLS = {
@@ -135,7 +135,7 @@ def check_and_repair(auto_repair: bool = True) -> Tuple[bool, dict]:
     """
     checker = _build_checker()
 
-    print("\n📦 Checking dependencies...")
+    print("\n[CHECK] Checking dependencies...")
     print("-" * 50)
     results = checker.check_all()
 
@@ -150,16 +150,16 @@ def check_and_repair(auto_repair: bool = True) -> Tuple[bool, dict]:
         }
 
         if failed:
-            print("\n🔧 Attempting auto-repair...")
+            print("\n[REPAIR] Attempting auto-repair...")
             print("-" * 50)
             repair_results = checker.repair_failures(auto_repair=True)
 
             for name, (success, message) in repair_results.items():
-                icon = "✓" if success else "✗"
+                icon = "[OK]" if success else "[X]"
                 print(f"  {icon} {name}: {message}")
 
             # Re-check after repair
-            print("\n🔄 Re-checking after repair...")
+            print("\n[RECHECK] Re-checking after repair...")
             print("-" * 50)
             results = checker.check_all()
             _print_check_results(checker, results)
@@ -176,17 +176,17 @@ def _print_check_results(checker: DependencyChecker, results: dict) -> None:
 
         if result.is_healthy:
             version_str = f"  ({result.version})" if result.version else ""
-            print(f"  ✓ {name}{version_str}")
+            print(f"  [OK] {name}{version_str}")
         elif not dep.required:
-            print(f"  ⚠ {name}: NOT FOUND (optional)")
-            print(f"      → {dep.get_install_instructions()}")
+            print(f"  [!] {name}: NOT FOUND (optional)")
+            print(f"     -> {dep.get_install_instructions()}")
             if name in INSTALL_URLS:
-                print(f"      → {INSTALL_URLS[name]}")
+                print(f"     -> {INSTALL_URLS[name]}")
         else:
-            print(f"  ✗ {name}: {result.message}")
-            print(f"      → {dep.get_install_instructions()}")
+            print(f"  [X] {name}: {result.message}")
+            print(f"     -> {dep.get_install_instructions()}")
             if name in INSTALL_URLS:
-                print(f"      → {INSTALL_URLS[name]}")
+                print(f"     -> {INSTALL_URLS[name]}")
 
 def _all_required_satisfied(checker: DependencyChecker, results: dict) -> bool:
     """Return True only if every required dependency is healthy."""
@@ -223,21 +223,21 @@ def run_install(auto_repair: bool = True) -> bool:
 
 def _print_banner() -> None:
     print("\n" + "=" * 50)
-    print("🚀 Local AI Runtime — Installer")
+    print("[INSTALL] Local AI Runtime - Installer")
     print("=" * 50)
     print(f"Python:   {sys.version.split()[0]}")
     print(f"Platform: {platform.system()} {platform.release()}")
 
 def _print_summary(all_ok: bool) -> None:
     print("\n" + "=" * 50)
-    print("📊 Installation Summary")
+    print("[SUMMARY] Installation Summary")
     print("=" * 50)
 
     if all_ok:
-        print("✓ All required dependencies are satisfied.")
-        print("✓ Local AI Runtime is ready to use.\n")
+        print("[OK] All required dependencies are satisfied.")
+        print("[OK] Local AI Runtime is ready to use.\n")
         print("  Run:  python -m Janus help")
     else:
-        print("✗ Some required dependencies could not be installed automatically.")
-        print("  Please install the items marked ✗ above, then re-run:\n")
+        print("[X] Some required dependencies could not be installed automatically.")
+        print("  Please install the items marked [X] above, then re-run:\n")
         print("      python install.py\n")

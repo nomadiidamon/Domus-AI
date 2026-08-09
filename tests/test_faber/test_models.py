@@ -8,7 +8,7 @@ the context are faked here so tests never spawn real processes or
 depend on Mentis.context being importable/side-effect-free.
 
 pull_model/build_model/list_models/remove_model are not yet implemented
-(each is a bare `pass`) — scaffolding tests for them are included and
+(each is a bare `pass`) - scaffolding tests for them are included and
 marked xfail/skip as appropriate so the suite documents the gap and
 starts passing for real the moment each function grows a real
 implementation.
@@ -55,7 +55,7 @@ class TestStartModel:
         assert mock_popen.call_count == 1
         # NOTE: unlike start_ollama, start_model's early-return path
         # returns the *Session* object, not the process, when the model
-        # is already running — this asymmetry is intentional per the
+        # is already running - this asymmetry is intentional per the
         # current implementation, so we pin it rather than "fixing" it.
         assert second is get_session("mercury")
 

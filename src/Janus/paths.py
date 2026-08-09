@@ -4,7 +4,7 @@ from pathlib import Path
 
 _DOMUS_MARKER_NAME = ".domus-marker"
 # ---------------------------------------------------------------------------
-# Runtime source root  (read-only — the Local-AI-Runtime installation itself)
+# Runtime source root  (read-only - the Local-AI-Runtime installation itself)
 # ---------------------------------------------------------------------------
 def find_root():
     """
@@ -60,7 +60,7 @@ def get_python_requirements_path():
 _HOST_MARKER_NAME = ".domus-host-marker"
 
 # ---------------------------------------------------------------------------
-# Host project root  (where writable output goes — the project using this runtime)
+# Host project root  (where writable output goes - the project using this runtime)
 # ---------------------------------------------------------------------------
 _host_project_root: Path | None = None
 
@@ -86,7 +86,7 @@ def get_host_project_root() -> Path:
     Resolution order:
       1. Explicit set_host_project_root() call (requires prior confirmation)
       2. LOCAL_AI_RUNTIME_HOST environment variable
-      3. Raises RuntimeError — no silent fallback to cwd
+      3. Raises RuntimeError - no silent fallback to cwd
 
     Raises:
         RuntimeError: If the host root has not been set yet.
@@ -145,7 +145,7 @@ def get_sessions_dir() -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Host initialization — prompting and validation
+# Host initialization - prompting and validation
 # ---------------------------------------------------------------------------
 def _ensure_host_marker(path: Path) -> None:
     """
@@ -183,7 +183,7 @@ def _prompt_for_path(suggested: Path) -> Path:
         RuntimeError: If the user cancels or provides an invalid path.
     """
     print("\n" + "=" * 50)
-    print("🗂  Host Project Initialization")
+    print("[DIR]  Host Project Initialization")
     print("=" * 50)
     print(
         "The Local AI Runtime needs to know which project it is working inside.\n"
@@ -204,17 +204,17 @@ def _prompt_for_path(suggested: Path) -> Path:
         raw = input("Enter the full path to your project root: ").strip()
 
         if not raw:
-            print("⚠ No path entered, please try again.\n")
+            print("[!] No path entered, please try again.\n")
             continue
 
         candidate = Path(raw).resolve()
 
         if not candidate.exists():
-            print(f"✗ Path does not exist: {candidate}\n")
+            print(f"[X] Path does not exist: {candidate}\n")
             continue
 
         if not candidate.is_dir():
-            print(f"✗ Path is not a directory: {candidate}\n")
+            print(f"[X] Path is not a directory: {candidate}\n")
             continue
 
         # Confirm the new path before accepting
@@ -223,7 +223,7 @@ def _prompt_for_path(suggested: Path) -> Path:
         if confirm in ("y", "yes"):
             return candidate
 
-        print("↩ Let's try again.\n")
+        print("[RETRY] Let's try again.\n")
 
 def initialize_host(suggested: Path | None = None, non_interactive: bool = False) -> Path:
     """
@@ -257,8 +257,8 @@ def initialize_host(suggested: Path | None = None, non_interactive: bool = False
     confirmed = _prompt_for_path(suggested)
     set_host_project_root(confirmed)
 
-    print(f"\n✓ Host project root set to: {confirmed}")
-    print(f"✓ Host marker created at:   {confirmed / _HOST_MARKER_NAME}")
+    print(f"\n[OK] Host project root set to: {confirmed}")
+    print(f"[OK] Host marker created at:   {confirmed / _HOST_MARKER_NAME}")
     print()
 
     return confirmed

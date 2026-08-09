@@ -79,7 +79,7 @@ class TestAIMemory:
     def test_to_dict_excludes_memory_limit_entries(self):
         """
         to_dict() intentionally omits memory_limit_entries (an internal
-        tuning knob, not conversational state) — pin that omission so a
+        tuning knob, not conversational state) - pin that omission so a
         future edit adding/removing dict keys is a visible, deliberate
         change.
         """

@@ -1,5 +1,5 @@
 """
-Tests for Faber/__init__.py — confirms the package's public re-exports
+Tests for Faber/__init__.py - confirms the package's public re-exports
 stay intact. This is cheap insurance against a refactor inside session.py
 / models.py / ollama_service.py / claude_service.py accidentally
 renaming something that __init__.py (and therefore `from Faber import X`

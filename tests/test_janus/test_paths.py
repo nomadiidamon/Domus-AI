@@ -2,10 +2,10 @@
 Tests for Janus/paths.py
 
 paths.py resolves two independent roots:
-  - the runtime *source* root (find_root(), via .domus-marker) — where
+  - the runtime *source* root (find_root(), via .domus-marker) - where
     Domus-AI itself is installed.
   - the *host project* root (get_host_project_root(), via
-    .domus-host-marker) — the project this runtime instance is working
+    .domus-host-marker) - the project this runtime instance is working
     inside, writable, created on demand.
 
 Both are exercised here against disposable tmp_path directories rather
@@ -38,7 +38,7 @@ class TestFindRoot:
     def test_finds_root_by_walking_up_from_file_location(self, monkeypatch):
         """
         Without LOCAL_AI_RUNTIME_ROOT set, find_root() walks up from
-        paths.py's own file location looking for .domus-marker — which
+        paths.py's own file location looking for .domus-marker - which
         in this real checkout means it should resolve to the actual
         project root (where .domus-marker genuinely lives).
         """

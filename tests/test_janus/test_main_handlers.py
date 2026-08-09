@@ -4,7 +4,7 @@ handle_stop, handle_status, handle_build, handle_doctor, handle_mcp,
 handle_mcp_launch).
 
 Every handler is tested by mocking the functions it calls into (Faber,
-Janus.doctor, Hestia) rather than letting any of them run for real —
+Janus.doctor, Hestia) rather than letting any of them run for real -
 this suite is about main.py's own argument-parsing/exit-code/output
 logic, not re-testing Faber or doctor (already covered in their own
 modules).

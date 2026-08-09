@@ -19,7 +19,7 @@ class TestConstruction:
         """
         Per RuntimeContext.__init__'s own docstring, constructing it must
         NOT touch disk or resolve real directories. We assert this by
-        making LOCAL_AI_RUNTIME_HOST point somewhere that doesn't exist —
+        making LOCAL_AI_RUNTIME_HOST point somewhere that doesn't exist -
         if construction tried to resolve/create it, this would raise.
         """
         monkeypatch.setenv("LOCAL_AI_RUNTIME_HOST", str(tmp_path / "does_not_exist"))
@@ -88,7 +88,7 @@ class TestStartup:
     def test_startup_returns_false_on_invalid_host(self, context, monkeypatch, tmp_path):
         """
         initialize_host() raises RuntimeError for a nonexistent
-        non-interactive path — startup() should catch that and return
+        non-interactive path - startup() should catch that and return
         False rather than propagating.
         """
         nonexistent = tmp_path / "does_not_exist_at_all"

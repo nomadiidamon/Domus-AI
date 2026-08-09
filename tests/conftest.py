@@ -5,7 +5,7 @@ This file is auto-loaded by pytest before any test runs. Its two jobs:
 
 1. Make the project's top-level packages (Hestia, Janus, Mentis, Faber,
    Custos, Mercurius, Lares, DomusAPI, utils) importable, the same way
-   tests/smoke_test.py did it — by adding src/ to sys.path. Tests then
+   tests/smoke_test.py did it - by adding src/ to sys.path. Tests then
    just do `from Hestia.hardware import detect_hardware` etc.
 
 2. Provide fixtures shared across every module's tests: an isolated,
@@ -14,7 +14,7 @@ This file is auto-loaded by pytest before any test runs. Its two jobs:
    process-wide global/module-level state between tests so one test's
    side effects can't leak into another.
 
-Everything here is intentionally boring — no test *behavior* lives in
+Everything here is intentionally boring - no test *behavior* lives in
 this file, only shared plumbing. Module-specific fixtures belong in each
 module's own conftest.py (e.g. tests/test_hestia/conftest.py).
 """

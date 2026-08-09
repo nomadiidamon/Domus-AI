@@ -25,7 +25,7 @@ def configure_logging(level: int = logging.INFO, fmt: str = DEFAULT_LOG_FORMAT) 
     """
     Configure the root logger once for the whole process.
 
-    Safe to call from multiple subsystems/entry points — only the first
+    Safe to call from multiple subsystems/entry points - only the first
     call takes effect (matching logging.basicConfig's own semantics), so
     it's fine for several modules to call this defensively without
     coordinating who goes first. Prefer this over calling
@@ -47,7 +47,7 @@ def load_json(path: Path, default: Any = None, logger: Optional[logging.Logger] 
     Args:
         path: Path to the JSON file.
         default: Value to return if the file is missing, empty, or
-                 invalid. Defaults to None if not provided — pass {} or
+                 invalid. Defaults to None if not provided - pass {} or
                  [] explicitly if that's what the caller expects back.
         logger: Optional logger to report warnings/errors to. If omitted,
                 nothing is logged (callers that want their own log

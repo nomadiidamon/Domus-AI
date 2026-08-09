@@ -44,7 +44,7 @@ class TestStartOllama:
         Callers checking e.g. `.pid` on the result will get different
         attribute access depending on whether ollama was already running.
         If this is unintentional, the fix belongs in ollama_service.py,
-        not here — this test exists so a future fix shows up as an
+        not here - this test exists so a future fix shows up as an
         intentional, visible change to this assertion instead of a
         silent behavior change.
         """

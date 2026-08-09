@@ -4,7 +4,7 @@ logging, AI memory, system status, and hardware refresh.
 
 These operations don't require a full startup() (no disk I/O needed for
 most of them), so most tests here use the plain `context` fixture rather
-than `started_context` — only get_system_status()'s hardware/uptime
+than `started_context` - only get_system_status()'s hardware/uptime
 fields and refresh_hardware() specifically need hardware detection
 mocked, which is done inline per-test rather than via full startup.
 """
@@ -178,7 +178,7 @@ class TestRefreshHardware:
 
         # _detect_hardware() swallows exceptions internally and just
         # leaves hardware_profile as whatever it already was (None if
-        # never set) — simulate a failed detection by pointing at a
+        # never set) - simulate a failed detection by pointing at a
         # HardwareDetector whose .detect() raises, which _detect_hardware
         # catches, so hardware_profile is left untouched by that call.
         with pytest.MonkeyPatch.context() as mp:

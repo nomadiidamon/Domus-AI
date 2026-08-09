@@ -1,4 +1,4 @@
-"""Tests for Faber/claude_service.py — launching Claude Code via Ollama."""
+"""Tests for Faber/claude_service.py - launching Claude Code via Ollama."""
 
 from unittest.mock import patch
 

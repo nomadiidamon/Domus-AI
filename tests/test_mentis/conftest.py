@@ -42,7 +42,7 @@ def context():
     """
     A plain, freshly-constructed RuntimeContext. Per its own docstring,
     construction is side-effect-free (no disk I/O), so this fixture
-    needs no filesystem isolation — only startup()/shutdown() touch disk.
+    needs no filesystem isolation - only startup()/shutdown() touch disk.
     """
     from Mentis.context import RuntimeContext
     return RuntimeContext(project_name="TestProject")

@@ -9,7 +9,7 @@ class FakeProcess:
     actually uses: .pid, .poll(), .terminate(). Using a real Popen in
     tests would mean actually spawning OS processes (slow, and Faber's
     real commands like "ollama serve" may not even be installed on the
-    test machine) — this fixture keeps the tests fast and hermetic.
+    test machine) - this fixture keeps the tests fast and hermetic.
     """
 
     def __init__(self, pid=12345):

@@ -2,7 +2,7 @@
 Tests for Janus/installer.py
 
 check_and_repair()/run_install() drive a real DependencyChecker built by
-_build_checker() against real dependency objects — but we swap in a
+_build_checker() against real dependency objects - but we swap in a
 DependencyChecker whose registered dependencies are small fakes (same
 approach as test_dependencies.py's TestDependencyChecker), so nothing
 here actually probes real system packages or shells out to pip/apt/brew.

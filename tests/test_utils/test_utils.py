@@ -1,5 +1,5 @@
 """
-Tests for utils.py — shared helpers used by every subsystem.
+Tests for utils.py - shared helpers used by every subsystem.
 
 utils.py is deliberately small (logging setup + JSON loading), so this
 suite is small too, but it's the one module every other subsystem

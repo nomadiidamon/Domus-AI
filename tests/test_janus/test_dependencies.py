@@ -6,11 +6,11 @@ subprocess, touches the filesystem, or reads os.environ. To keep this
 suite hermetic and fast:
   - PythonPackageDependency is tested against `os` (a real stdlib module
     guaranteed to be importable everywhere) for the "present" path, and
-    a name that can't possibly exist for the "missing" path — no mocking
+    a name that can't possibly exist for the "missing" path - no mocking
     needed since we're not asserting anything about *our* project's deps.
   - SystemCommandDependency mocks subprocess.run.
   - DirectoryDependency and EnvironmentVariableDependency use tmp_path /
-    monkeypatch respectively — both are naturally hermetic already.
+    monkeypatch respectively - both are naturally hermetic already.
   - DependencyChecker is tested against small fake Dependency subclasses
     defined locally, so its aggregation logic is tested independently of
     any real dependency's check()/repair() behavior.

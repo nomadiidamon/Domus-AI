@@ -315,7 +315,7 @@ class RuntimeContext:
             except RuntimeError as e:
                 # Covers user cancellation and invalid paths
                 logger.error(f"Startup aborted: {e}")
-                print(f"\n✗ {e}")
+                print(f"\n[X] {e}")
                 return False
 
             except Exception as e:

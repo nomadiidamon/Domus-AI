@@ -1,5 +1,5 @@
 """
-Tests for Janus/main.py's main() — argument parsing, --root handling,
+Tests for Janus/main.py's main() - argument parsing, --root handling,
 and command dispatch. All handlers and RuntimeContext are mocked so
 these tests exercise only main()'s own parsing/dispatch logic.
 """
@@ -148,7 +148,7 @@ class TestMainCommandDispatch:
     def test_continues_without_context_if_context_init_raises(self, monkeypatch):
         """
         main() deliberately swallows RuntimeContext construction/startup
-        errors and continues without a context rather than aborting —
+        errors and continues without a context rather than aborting -
         pin that resilience behavior.
         """
         monkeypatch.setattr("sys.argv", ["janus", "build", "mercury"])

@@ -3,7 +3,7 @@ Tests for Hestia/model_catalog.py
 
 Focuses on the two helper functions consumed by hardware.py's
 ModelRecommender (get_tier, get_category) and on structural invariants
-of MODEL_DATABASE itself — these catch the most common editing mistake
+of MODEL_DATABASE itself - these catch the most common editing mistake
 described in the file's own header comment (adding a tier entry with a
 typo'd category key, or forgetting an accelerator/size combination).
 """
@@ -45,7 +45,7 @@ class TestGetTier:
     def test_falls_back_to_none_medium_for_unregistered_accelerator(self):
         """
         QUALCOMM_HEXAGON and NVIDIA_MPS are declared in AcceleratorType but
-        (as of writing) have no MODEL_DATABASE entry at all — get_tier must
+        (as of writing) have no MODEL_DATABASE entry at all - get_tier must
         degrade gracefully to AcceleratorType.NONE / ModelSize.MEDIUM
         rather than KeyError.
         """
@@ -82,7 +82,7 @@ class TestGetCategory:
 
 class TestModelDatabaseStructure:
     """
-    Structural sanity checks over the whole database — these are the
+    Structural sanity checks over the whole database - these are the
     kind of regression a hand-edit could easily introduce and that
     get_tier/get_category alone wouldn't catch.
     """
@@ -103,7 +103,7 @@ class TestModelDatabaseStructure:
         Every category key used in any tier entry should be listed in
         KNOWN_CATEGORIES (or be one of the non-model-list scalar config
         keys), so get_category's "safe missing category" behavior stays
-        meaningful — an entry with an undeclared category key is a sign
+        meaningful - an entry with an undeclared category key is a sign
         someone forgot to update KNOWN_CATEGORIES per the file's own
         instructions.
         """
@@ -131,7 +131,7 @@ class TestModelDatabaseStructure:
     def test_tier_fallback_order_covers_all_but_xlarge(self):
         """
         XLARGE is intentionally not part of the fallback chain (nothing
-        should fall *up* to the biggest tier) — pin that assumption so a
+        should fall *up* to the biggest tier) - pin that assumption so a
         future edit doesn't accidentally add it.
         """
         assert ModelSize.XLARGE not in TIER_FALLBACK_ORDER

@@ -591,7 +591,7 @@ class DependencyChecker:
                 result = dep.check()
                 self.check_results[name] = result
                 
-                status_icon = "✓" if result.is_healthy else "✗"
+                status_icon = "[OK]" if result.is_healthy else "[X]"
                 self.logger.info(f"{status_icon} {name}: {result.message}")
             
             except Exception as e:
@@ -633,9 +633,9 @@ class DependencyChecker:
                 results[name] = (success, message)
                 
                 if success:
-                    self.logger.info(f"✓ Repaired {name}")
+                    self.logger.info(f"[OK] Repaired {name}")
                 else:
-                    self.logger.warning(f"✗ Could not repair {name}: {message}")
+                    self.logger.warning(f"[X] Could not repair {name}: {message}")
             
             except Exception as e:
                 results[name] = (False, f"Repair failed: {str(e)}")

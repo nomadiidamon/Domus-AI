@@ -87,7 +87,7 @@ def check_dependencies() -> Tuple[bool, Dict[str, bool]]:
     Returns:
         Tuple of (all_satisfied, dependency_status_dict)
     """
-    print("\n📦 Checking Dependencies")
+    print("\n[CHECK] Checking Dependencies")
     print("-" * 50)
     
     checker = _build_checker()
@@ -101,30 +101,30 @@ def check_dependencies() -> Tuple[bool, Dict[str, bool]]:
         dep = checker.dependencies[name]
 
         if result.is_healthy:
-            print(f"✓ {name}: {result.version or result.message}")
+            print(f"[OK] {name}: {result.version or result.message}")
         elif not dep.required:
-            print(f"⚠ {name}: NOT FOUND (optional)")
+            print(f"[!] {name}: NOT FOUND (optional)")
         else:
-            print(f"✗ {name}: NOT FOUND")
+            print(f"[X] {name}: NOT FOUND")
             all_satisfied = False
 
     summary = checker.get_summary()
 
     if not all_satisfied:
-        print("\n⚠ REQUIRED dependencies missing:")
+        print("\n[!] REQUIRED dependencies missing:")
         for name, result in results.items():
             dep = checker.dependencies[name]
             if dep.required and not result.is_healthy:
-                print(f"  • {name} — {dep.get_install_instructions()}")
+                print(f"  - {name} -- {dep.get_install_instructions()}")
 
     missing_optional = [
         name for name, result in results.items()
         if not result.is_healthy and not checker.dependencies[name].required
     ]
     if missing_optional:
-        print("\n⚠ OPTIONAL dependencies missing:")
+        print("\n[!] OPTIONAL dependencies missing:")
         for name in missing_optional:
-            print(f"  • {name} — {checker.dependencies[name].get_install_instructions()}")
+            print(f"  - {name} -- {checker.dependencies[name].get_install_instructions()}")
 
     return all_satisfied, status
 
@@ -132,7 +132,7 @@ def _check_ollama_server_running(timeout: int = 3) -> bool:
     """
     Check whether the Ollama server is reachable via its health endpoint.
 
-    Uses a plain HTTP request with a short timeout — no subprocess involved,
+    Uses a plain HTTP request with a short timeout -- no subprocess involved,
     so it cannot hang due to child process pipe issues.
 
     Args:
@@ -156,11 +156,11 @@ def check_models() -> Tuple[bool, List[str]]:
     Returns:
         Tuple of (models_found, list_of_model_names)
     """
-    print("\n🤖 Checking Models")
+    print("\n[MODELS] Checking Models")
     print("-" * 50)
     
     if not _check_ollama_server_running():
-        print("⚠ Ollama server is not running — cannot list models")
+        print("[!] Ollama server is not running -- cannot list models")
         print("  Start it with:  ollama serve")
         logger.warning("Ollama server unreachable at %s", OLLAMA_API_BASE)
         return False, []
@@ -174,7 +174,7 @@ def check_models() -> Tuple[bool, List[str]]:
         )
         
         if result.returncode != 0:
-            print("⚠ Could not list Ollama models")
+            print("[!] Could not list Ollama models")
             logger.warning(f"Ollama list failed: {result.stderr}")
             return False, []
         
@@ -185,23 +185,23 @@ def check_models() -> Tuple[bool, List[str]]:
                 if line.strip():
                     model_name = line.split()[0]
                     models.append(model_name)
-                    print(f"✓ Found model: {model_name}")
+                    print(f"[OK] Found model: {model_name}")
         
         if not models:
-            print("⚠ No models installed")
+            print("[!] No models installed")
             print("Run 'ollama pull <model>' to download a model")
             return False, []
         
         return True, models
         
     except FileNotFoundError:
-        print("✗ Ollama not found - cannot check models")
+        print("[X] Ollama not found - cannot check models")
         return False, []
     except subprocess.TimeoutExpired:
-        print("⚠ Ollama check timed out")
+        print("[!] Ollama check timed out")
         return False, []
     except Exception as e:
-        print(f"✗ Error checking models: {e}")
+        print(f"[X] Error checking models: {e}")
         logger.error(f"Error checking models: {e}")
         return False, []
 
@@ -212,7 +212,7 @@ def check_mcp() -> Tuple[bool, Dict]:
     Returns:
         Tuple of (config_valid, config_info)
     """
-    print("\n🔌 Checking MCP Configuration")
+    print("\n[MCP] Checking MCP Configuration")
     print("-" * 50)
     
     try:
@@ -222,7 +222,7 @@ def check_mcp() -> Tuple[bool, Dict]:
         config_file = mcp_path / "servers.json"
         
         if not config_file.exists():
-            print("⚠ MCP configuration not found")
+            print("[!] MCP configuration not found")
             logger.warning(f"MCP servers.json not found at {config_file}")
             return False, {}
         
@@ -231,12 +231,12 @@ def check_mcp() -> Tuple[bool, Dict]:
             config = json.load(f)
         
         if not config:
-            print("⚠ No MCP servers configured")
+            print("[!] No MCP servers configured")
             return False, config
         
-        print(f"✓ Found {len(config)} MCP server(s) configured")
+        print(f"[OK] Found {len(config)} MCP server(s) configured")
         for server in config:
-            print(f"  • {server}")
+            print(f"  - {server}")
         
         return True, config
         
@@ -244,14 +244,14 @@ def check_mcp() -> Tuple[bool, Dict]:
         logger.error("Could not import paths module")
         return False, {}
     except FileNotFoundError:
-        print("⚠ MCP configuration not found")
+        print("[!] MCP configuration not found")
         return False, {}
     except json.JSONDecodeError as e:
-        print(f"✗ Invalid MCP configuration: {e}")
+        print(f"[X] Invalid MCP configuration: {e}")
         logger.error(f"MCP config JSON error: {e}")
         return False, {}
     except Exception as e:
-        print(f"✗ Error checking MCP: {e}")
+        print(f"[X] Error checking MCP: {e}")
         logger.error(f"Error checking MCP: {e}")
         return False, {}
 
@@ -264,7 +264,7 @@ def full_diagnostic() -> bool:
     """
     logger.info("Starting full diagnostic")
     print("\n" + "=" * 50)
-    print("🔍 Local AI Runtime Diagnostic")
+    print("[FIND] Local AI Runtime Diagnostic")
     print("=" * 50)
     
     deps_ok, dep_status = check_dependencies()
@@ -278,18 +278,18 @@ def full_diagnostic() -> bool:
     
     # Summary
     print("\n" + "=" * 50)
-    print("📊 Diagnostic Summary")
+    print("[SUMMARY] Diagnostic Summary")
     print("=" * 50)
-    print(f"Dependencies: {'✓ OK' if deps_ok else '✗ FAILED'}")
-    print(f"Models: {'✓ OK' if models_ok else '⚠ WARNING'}")
-    print(f"MCP Config: {'✓ OK' if mcp_ok else '⚠ WARNING'}")
+    print(f"Dependencies: {'[OK]' if deps_ok else '[X] FAILED'}")
+    print(f"Models: {'[OK]' if models_ok else '[!] WARNING'}")
+    print(f"MCP Config: {'[OK]' if mcp_ok else '[!] WARNING'}")
     print("=" * 50)
     
     if deps_ok:
-        print("\n✓ Your environment is ready to use!")
+        print("\n[OK] Your environment is ready to use!")
         logger.info("Diagnostic completed - environment is ready")
         return True
     else:
-        print("\n✗ Please fix the issues above before using the runtime")
+        print("\n[X] Please fix the issues above before using the runtime")
         logger.error("Diagnostic completed - environment has issues")
         return False

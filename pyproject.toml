@@ -23,7 +23,7 @@ homepage = "https://github.com/nomadiidamon/Domus-AI"
 
 # Explicit package list rather than find_packages(), since the subsystem
 # packages (Hestia, Janus, Mentis, Faber, Custos, Mercurius, Lares,
-# DomusAPI) don't share a common namespace prefix — each is independently
+# DomusAPI) don't share a common namespace prefix - each is independently
 # top-level under src/.
 
 [tool.setuptools]
@@ -50,9 +50,9 @@ markers = [
     "faber: tests for the Faber subsystem (sessions, model/ollama/claude process management)",
     "mentis: tests for the Mentis subsystem (runtime context and state)",
     "custos: tests for the Custos subsystem (security, permissions, MCP)",
-    "lares: tests for the Lares subsystem (agents) — currently a stub package",
-    "mercurius: tests for the Mercurius subsystem (event bus) — currently a stub package",
-    "domusapi: tests for the DomusAPI subsystem (top-level wrapper) — currently a stub package",
+    "lares: tests for the Lares subsystem (agents) - currently a stub package",
+    "mercurius: tests for the Mercurius subsystem (event bus) - currently a stub package",
+    "domusapi: tests for the DomusAPI subsystem (top-level wrapper) - currently a stub package",
     "utils: tests for the shared utils module",
 ]
 
