@@ -1,0 +1,140 @@
+"""
+Tests for Hestia/model_catalog.py
+
+Focuses on the two helper functions consumed by hardware.py's
+ModelRecommender (get_tier, get_category) and on structural invariants
+of MODEL_DATABASE itself — these catch the most common editing mistake
+described in the file's own header comment (adding a tier entry with a
+typo'd category key, or forgetting an accelerator/size combination).
+"""
+
+import pytest
+
+from Hestia.model_catalog import (
+    MODEL_DATABASE,
+    KNOWN_CATEGORIES,
+    TIER_FALLBACK_ORDER,
+    get_tier,
+    get_category,
+)
+from Hestia.types import AcceleratorType, ModelSize
+
+pytestmark = pytest.mark.hestia
+
+
+class TestGetTier:
+    def test_returns_exact_match_when_present(self):
+        tier = get_tier(AcceleratorType.NVIDIA_CUDA, ModelSize.TINY)
+        assert tier is MODEL_DATABASE[AcceleratorType.NVIDIA_CUDA][ModelSize.TINY]
+
+    def test_falls_back_within_accelerator_when_size_missing(self):
+        """
+        For an accelerator that's registered in MODEL_DATABASE but doesn't
+        have every ModelSize tier defined, get_tier should walk
+        TIER_FALLBACK_ORDER rather than raising or returning an empty tier.
+        """
+        # Find an accelerator that's registered but missing at least one size.
+        for accel, sizes in MODEL_DATABASE.items():
+            missing = [s for s in ModelSize if s not in sizes]
+            if missing and sizes:
+                tier = get_tier(accel, missing[0])
+                assert tier in sizes.values()
+                return
+        pytest.skip("every registered accelerator defines every ModelSize tier")
+
+    def test_falls_back_to_none_medium_for_unregistered_accelerator(self):
+        """
+        QUALCOMM_HEXAGON and NVIDIA_MPS are declared in AcceleratorType but
+        (as of writing) have no MODEL_DATABASE entry at all — get_tier must
+        degrade gracefully to AcceleratorType.NONE / ModelSize.MEDIUM
+        rather than KeyError.
+        """
+        unregistered = [a for a in AcceleratorType if a not in MODEL_DATABASE]
+        if not unregistered:
+            pytest.skip("all AcceleratorType members are registered in MODEL_DATABASE")
+
+        tier = get_tier(unregistered[0], ModelSize.TINY)
+
+        assert tier is MODEL_DATABASE[AcceleratorType.NONE][ModelSize.MEDIUM]
+
+    def test_none_accelerator_medium_exists(self):
+        """The last-resort fallback target itself must exist."""
+        assert AcceleratorType.NONE in MODEL_DATABASE
+        assert ModelSize.MEDIUM in MODEL_DATABASE[AcceleratorType.NONE]
+
+
+class TestGetCategory:
+    def test_returns_list_for_known_category(self):
+        tier = MODEL_DATABASE[AcceleratorType.NVIDIA_CUDA][ModelSize.TINY]
+        result = get_category(tier, "models")
+        assert isinstance(result, list)
+        assert result == tier["models"]
+
+    def test_returns_empty_list_for_missing_category(self):
+        tier = {"models": ["some-model"]}
+        result = get_category(tier, "coding")
+        assert result == []
+
+    def test_never_raises_keyerror(self):
+        result = get_category({}, "anything")
+        assert result == []
+
+
+class TestModelDatabaseStructure:
+    """
+    Structural sanity checks over the whole database — these are the
+    kind of regression a hand-edit could easily introduce and that
+    get_tier/get_category alone wouldn't catch.
+    """
+
+    def test_all_tier_keys_are_model_size_members(self):
+        for accel, sizes in MODEL_DATABASE.items():
+            for size_key in sizes:
+                assert isinstance(size_key, ModelSize), (
+                    f"{accel} has a non-ModelSize key: {size_key!r}"
+                )
+
+    def test_all_top_level_keys_are_accelerator_type_members(self):
+        for accel in MODEL_DATABASE:
+            assert isinstance(accel, AcceleratorType)
+
+    def test_every_tier_entry_has_only_known_or_declared_categories(self):
+        """
+        Every category key used in any tier entry should be listed in
+        KNOWN_CATEGORIES (or be one of the non-model-list scalar config
+        keys), so get_category's "safe missing category" behavior stays
+        meaningful — an entry with an undeclared category key is a sign
+        someone forgot to update KNOWN_CATEGORIES per the file's own
+        instructions.
+        """
+        scalar_keys = {"quantization", "batch_size", "context", "performance"}
+        allowed = set(KNOWN_CATEGORIES) | scalar_keys
+
+        for accel, sizes in MODEL_DATABASE.items():
+            for size, tier in sizes.items():
+                unknown = set(tier.keys()) - allowed
+                assert not unknown, (
+                    f"{accel}/{size} has undeclared keys {unknown}; "
+                    f"add them to KNOWN_CATEGORIES if intentional"
+                )
+
+    def test_model_list_categories_contain_only_strings(self):
+        for accel, sizes in MODEL_DATABASE.items():
+            for size, tier in sizes.items():
+                for category in KNOWN_CATEGORIES:
+                    values = tier.get(category, [])
+                    assert isinstance(values, list)
+                    assert all(isinstance(v, str) for v in values), (
+                        f"{accel}/{size}/{category} contains a non-string entry"
+                    )
+
+    def test_tier_fallback_order_covers_all_but_xlarge(self):
+        """
+        XLARGE is intentionally not part of the fallback chain (nothing
+        should fall *up* to the biggest tier) — pin that assumption so a
+        future edit doesn't accidentally add it.
+        """
+        assert ModelSize.XLARGE not in TIER_FALLBACK_ORDER
+        assert set(TIER_FALLBACK_ORDER) == {
+            ModelSize.LARGE, ModelSize.MEDIUM, ModelSize.SMALL, ModelSize.TINY,
+        }

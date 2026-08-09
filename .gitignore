@@ -10,6 +10,7 @@ src/Lares/__pycache__/
 src/Mentis/__pycache__/
 src/Mercurius/__pycache__/
 
+.pytest_cache/
 
 *.pyc
 tests/.smoke_test_output/

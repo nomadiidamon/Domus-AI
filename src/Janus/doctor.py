@@ -47,6 +47,13 @@ def _build_checker() -> DependencyChecker:
             required=True,
             description="NVIDIA GPU monitoring",
         ),
+        # Will remove in production
+        #PythonPackageDependency(
+        #    "pytest",
+        #    min_version="7.0.0",
+        #    required=True,
+        #    description="Testing framework",
+        #),
 
         # System commands
         SystemCommandDependency(
