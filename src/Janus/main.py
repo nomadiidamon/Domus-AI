@@ -269,58 +269,68 @@ def main() -> int:
     command = raw_args[0].lower() if raw_args else ""
     args = raw_args[1:]
 
-    ctx = None
-    # Initialize runtime context and bind it to models
     try:
-        from Mentis.context import RuntimeContext
-        from Faber.models import set_context
-        from pathlib import Path
-
-        ctx = RuntimeContext(project_name="LocalAIRuntime")
-        started = ctx.startup(
-            suggested_host=Path(suggested_root) if suggested_root else None
-        )
-
-        if not started:
-            return 1
-
-        set_context(ctx)
-
-    except Exception as e:
-        logger.warning(f"RuntimeContext unavailable, continuing without it: {e}")
-        ctx = None
-    
-    try:
-        if command == "start":
-            handle_start(args)
-        elif command == "stop":
-            handle_stop(args)
+        if command in ["help", "-h", "--help"]:
+            print_help()
         elif command == "status":
-            handle_status()
-        elif command == "build":
-            handle_build(args)
+            handle_status() 
         elif command == "doctor":
             handle_doctor()
-        elif command == "mcp":
-            handle_mcp(args)
-        elif command in ["help", "-h", "--help"]:
-            print_help()
         else:
-            logger.error(f"Unknown command: {command}")
-            print(f"✗ Unknown command: '{command}'")
-            print("\nRun 'python -m Janus help' for usage information")
-            return 1  # <- PROPER EXIT CODE
-        
-        return 0  # <- SUCCESS EXIT CODE
-        
-    except KeyboardInterrupt:
-        logger.info("Operation cancelled by user")
-        print("\n⚠ Operation cancelled")
-        return 1  # <- GRACEFUL Ctrl+C
+            ctx = None
+            # Initialize runtime context and bind it to models
+            try:
+                from Mentis.context import RuntimeContext
+                from Faber.models import set_context
+                from pathlib import Path
+
+                ctx = RuntimeContext(project_name="LocalAIRuntime")
+                started = ctx.startup(
+                    suggested_host=Path(suggested_root) if suggested_root else None
+                )
+
+                if not started:
+                    return 1
+
+                set_context(ctx)
+
+            except Exception as e:
+                logger.warning(f"RuntimeContext unavailable, continuing without it: {e}")
+                ctx = None
+            
+            try:
+                if command == "start":
+                    handle_start(args)
+                elif command == "stop":
+                    handle_stop(args)
+                elif command == "build":
+                    handle_build(args)
+                elif command == "mcp":
+                    handle_mcp(args)
+                else:
+                    logger.error(f"Unknown command: {command}")
+                    print(f"✗ Unknown command: '{command}'")
+                    print("\nRun 'python -m Janus help' for usage information")
+                    return 1  # <- PROPER EXIT CODE
+                
+                return 0  # <- SUCCESS EXIT CODE
+                
+            except KeyboardInterrupt:
+                logger.info("Operation cancelled by user")
+                print("\n⚠ Operation cancelled")
+                return 1  # <- GRACEFUL Ctrl+C
+            except Exception as e:
+                logger.critical(f"Unexpected error in main: {e}", exc_info=True)
+                print(f"\n✗ Unexpected error: {e}")
+                return 1
+
+        return 0
+
     except Exception as e:
         logger.critical(f"Unexpected error in main: {e}", exc_info=True)
         print(f"\n✗ Unexpected error: {e}")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())  # <- PROPER EXIT CODE
