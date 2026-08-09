@@ -80,19 +80,25 @@ jobs:
 
       - name: Install TeX Live
         run: |
+          sudo apt-get update
           sudo apt-get install -y \
+            texlive-xetex \
             texlive-latex-base \
             texlive-latex-extra \
             texlive-fonts-recommended \
             texlive-fonts-extra \
             texlive-font-utils \
             texlive-extra-utils \
-            latexmk
+            latexmk \
+            fonts-noto \
+            fonts-noto-color-emoji
 
-      - name: Verify LaTeX tools
+      - name: Verify Documentation tools
         run: |
-          pdflatex --version
-          repstopdf --version
+          doxygen --version
+          xelatex --version
+          latexmk --version
+          fc-list | grep -i "Noto" | head -20
 
       - name: Generate Doxygen documentation
         run: doxygen Doxyfile
@@ -104,8 +110,11 @@ jobs:
       - name: Build PDF documentation
         run: |
           cd Docs/latex
-          make -j$(nproc)
-
+          latexmk -xelatex \
+            -interaction=nonstopmode \
+            -halt-on-error \
+            refman.tex
+    
       - name: Rename PDF
         run: |
           mv Docs/latex/refman.pdf "Docs/latex/${{ steps.project.outputs.pdf_name }}"
