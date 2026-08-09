@@ -567,7 +567,7 @@ class RuntimeContext:
         Returns:
             Dict mapping session names to their status snapshots
         """
-        from .session import get_all_sessions
+        from Faber.session import get_all_sessions
 
         sessions = get_all_sessions()
         result = {}

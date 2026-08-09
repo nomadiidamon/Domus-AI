@@ -72,13 +72,26 @@ def _build_checker() -> DependencyChecker:
             description="Version comparison for dependency checks",
         ),
         PythonPackageDependency(
-            "pynvml",
-            min_version="12.0.0",
+            "python-dotenv",
+            import_name="dotenv",
+            min_version="1.0.0",
             required=True,
-            description="NVIDIA GPU monitoring (required only for NVIDIA GPUs)",
+            description="Load environment variables from .env files",
+        ),
+        PythonPackageDependency(
+            "nvidia-ml-py",
+            import_name="pynvml",
+            min_version="7.352.0",
+            required=True,
+            description="NVIDIA GPU monitoring",
         ),
 
         # System commands
+        SystemCommandDependency(
+            "python",
+            required=True,
+            description="Python interpreter",
+        ),
         SystemCommandDependency(
             "ollama",
             required=True,

@@ -20,13 +20,55 @@ def _build_checker() -> DependencyChecker:
     checker = DependencyChecker()
 
     checker.register_many([
-        SystemCommandDependency("python",  required=True,  description="Python interpreter"),
-        SystemCommandDependency("ollama",  required=True,  description="Ollama runtime"),
-        SystemCommandDependency("git",     required=True,  description="Git version control"),
-        SystemCommandDependency("claude",  required=False, description="Claude Code (optional)"),
-        PythonPackageDependency("psutil",  required=True,  description="System monitoring"),
-        PythonPackageDependency("pynvml",  required=True, description="NVIDIA GPU monitoring (required only for NVIDIA GPUs)"),
-        PythonPackageDependency("python-dotenv", import_name="dotenv", required=True, description="Environment variable management")
+        # Python packages
+        PythonPackageDependency(
+            "psutil",
+            min_version="5.9.0",
+            required=True,
+            description="CPU, RAM, and process monitoring",
+        ),
+        PythonPackageDependency(
+            "packaging",
+            min_version="23.0",
+            required=True,
+            description="Version comparison for dependency checks",
+        ),
+        PythonPackageDependency(
+            "python-dotenv",
+            import_name="dotenv",
+            min_version="1.0.0",
+            required=True,
+            description="Load environment variables from .env files",
+        ),
+        PythonPackageDependency(
+            "nvidia-ml-py",
+            import_name="pynvml",
+            min_version="7.352.0",
+            required=True,
+            description="NVIDIA GPU monitoring",
+        ),
+
+        # System commands
+        SystemCommandDependency(
+            "python",
+            required=True,
+            description="Python interpreter",
+        ),
+        SystemCommandDependency(
+            "ollama",
+            required=True,
+            description="Ollama model runtime",
+        ),
+        SystemCommandDependency(
+            "git",
+            required=True,
+            description="Git version control",
+        ),
+        SystemCommandDependency(
+            "claude",
+            required=False,
+            description="Claude Code integration (optional)",
+        ),
     ])
 
     return checker

@@ -3,10 +3,10 @@ import sys
 import logging
 from typing import Optional
 
-from runtime.ollama_service import start_ollama, stop_ollama
-from runtime.session import stop_session, get_status, get_all_sessions
-from runtime.models import start_model, stop_model, build_model
-from .doctor import full_diagnostic
+from Faber.ollama_service import start_ollama, stop_ollama
+from Faber.session import stop_session, get_status, get_all_sessions
+from Faber.models import start_model, stop_model, build_model
+from Janus.doctor import full_diagnostic
 
 # Configure logging
 logging.basicConfig(
@@ -137,7 +137,7 @@ Started: {session['started']}
             )
 
     try:
-        from runtime.models import _context as ctx
+        from Faber.models import _context as ctx
 
         if ctx is not None:
             ctx.refresh_hardware()
@@ -222,7 +222,7 @@ def handle_mcp_launch(args: list) -> None:
     auto_yes = "--yes" in args
     
     try:
-        from runtime.claude import ollama_launch_claude
+        from Faber.claude_service import ollama_launch_claude
         
         logger.info(f"Launching Claude Code with model: {model}")
         print(f"🚀 Launching Claude Code with model: {model}")
@@ -274,8 +274,8 @@ def main() -> int:
     ctx = None
     # Initialize runtime context and bind it to models
     try:
-        from runtime.context import RuntimeContext
-        from runtime.models import set_context
+        from Mentis.context import RuntimeContext
+        from Faber.models import set_context
         from pathlib import Path
 
         ctx = RuntimeContext(project_name="LocalAIRuntime")

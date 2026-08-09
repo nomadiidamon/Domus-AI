@@ -1,4 +1,13 @@
 __pycache__/
+Custos/__pycache__/
+Faber/__pycache__/
 Hestia/__pycache__/
+Janus/__pycache__/
+Lares/__pycache__/
+Mentis/__pycache__/
+Mercurius/__pycache__/
+runtime/__pycache__/
+
+
 *.pyc
 scripts/.smoke_test_output/

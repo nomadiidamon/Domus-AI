@@ -1,7 +1,7 @@
 # Handles all model pulling and building commands
 import subprocess
 import logging
-from runtime.session import get_session, create_session, stop_session
+from Faber.session import get_session, create_session, stop_session
 
 logger = logging.getLogger(__name__)
 

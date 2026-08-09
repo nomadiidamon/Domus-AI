@@ -2,42 +2,43 @@
 import os
 from pathlib import Path
 
+_DOMUS_MARKER_NAME = ".domus-marker"
 # ---------------------------------------------------------------------------
 # Runtime source root  (read-only — the Local-AI-Runtime installation itself)
 # ---------------------------------------------------------------------------
 def find_root():
     """
-    Find the root directory of the AI runtime project.
+    Find the root directory of the Domus-AI project.
     
-    Searches for a .ai-runtime-marker file starting from the current script
+    Searches for a .domus-marker file starting from the current script
     and working upward through parent directories.
     
     Returns:
-        Path: Root directory of the AI runtime project
+        Path: Root directory of the Domus-AI project
         
     Raises:
-        RuntimeError: If .ai-runtime-marker file is not found
+        RuntimeError: If .domus-marker file is not found
     """
 
     env_root = os.environ.get("LOCAL_AI_RUNTIME_ROOT")
     if env_root:
         root = Path(env_root).resolve()
-        if not (root / ".ai-runtime-marker").exists():
+        if not (root / _DOMUS_MARKER_NAME).exists():
             raise RuntimeError(
-                f"LOCAL_AI_RUNTIME_ROOT is set to '{root}' but no .ai-runtime-marker was found there."
+                f"LOCAL_AI_RUNTIME_ROOT is set to '{root}' but no .domus-marker was found there."
             )
         return root
 
     current = Path(__file__).resolve()
 
     while current != current.parent:
-        if (current / ".ai-runtime-marker").exists():
+        if (current / _DOMUS_MARKER_NAME).exists():
             return current
         current=current.parent
 
     raise RuntimeError(
-        "AI runtime not found. Make sure you're running from within the Local-AI-Runtime project "
-        "and that a .ai-runtime-marker file exists in the project root."
+        "Domus-AI project root not found. Make sure you're running from within the Domus-AI project "
+        "and that a .domus-marker file exists in the project root."
     )
 
 # ---------------------------------------------------------------------------

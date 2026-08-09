@@ -27,7 +27,7 @@ from pathlib import Path
 # importable regardless of where this script is invoked from, by adding
 # the PROJECT ROOT (not any subpackage dir) to sys.path. Each subpackage
 # has its own __init__.py and uses relative imports internally; cross-
-# package imports (e.g. runtime/context.py importing Janus.paths) use
+# package imports (e.g. Mentis/context.py importing Janus.paths) use
 # absolute imports since sibling packages can't use relative imports
 # across package boundaries.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -128,7 +128,7 @@ def check_session_lifecycle():
     any OS. Uses a tiny fake process object matching the .poll()/.pid/
     .terminate() surface that session.py expects.
     """
-    from runtime.session import create_session, get_session, stop_session, get_all_sessions
+    from Faber.session import create_session, get_session, stop_session, get_all_sessions
 
     class FakeProcess:
         def __init__(self):
@@ -171,7 +171,7 @@ def check_dependencies_module():
 
 def check_context_module():
     """context.py is state-heavy; just confirm it imports and constructs cleanly."""
-    from runtime import context
+    from Mentis import context
     assert hasattr(context, "RuntimeContext")
     assert hasattr(context, "get_context")
     return "imported ok"
@@ -188,7 +188,7 @@ def check_cli_module_imports():
     Janus/main.py is the CLI entry point (invoked as `python -m Janus`).
     Importing it only proves its top-level imports resolve — it does NOT
     exercise lazy/inline imports inside its functions (e.g.
-    `from runtime.context import ...` called only when a command runs).
+    `from Mentis.context import ...` called only when a command runs).
     So beyond importing, we also invoke it with the side-effect-free
     "help" command via subprocess to catch import errors that only surface
     at call time.
@@ -262,8 +262,8 @@ CORE_CHECKS = [
     ("Hestia.hardware.detect_hardware", check_hardware_detection),
     ("Hestia.model_catalog imports", check_model_catalog_import),
     ("Janus.dependencies.DependencyChecker", check_dependencies_module),
-    ("session create/get/stop cycle", check_session_lifecycle),
-    ("context module imports", check_context_module),
+    ("Faber.session create/get/stop cycle", check_session_lifecycle),
+    ("Mentis.context module imports", check_context_module),
     ("mcp.MCPManager stub imports", check_mcp_stub),
     ("Janus (python -m Janus) CLI", check_cli_module_imports),
 ]
