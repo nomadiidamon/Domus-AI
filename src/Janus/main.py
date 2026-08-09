@@ -8,11 +8,9 @@ from Faber.session import stop_session, get_status, get_all_sessions
 from Faber.models import start_model, stop_model, build_model
 from Janus.doctor import full_diagnostic
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+from utils import configure_logging
+
+configure_logging()
 logger = logging.getLogger(__name__)
 
 

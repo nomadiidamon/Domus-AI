@@ -732,18 +732,3 @@ def print_hardware_report(profile: HardwareProfile, recommendation: Optional[Mod
             print(f"Tool use:     {', '.join(recommendation.tool_models)}")
         print(f"\nReasoning:    {recommendation.reasoning}")
 
-if __name__ == "__main__":
-    # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    # Detect and print hardware info
-    print("\n" + "="*60)
-    print("SYSTEM HARDWARE DETECTION")
-    print("="*60 + "\n")
-    
-    profile = detect_hardware()
-    recommendation = recommend_model(profile)
-    print_hardware_report(profile, recommendation)

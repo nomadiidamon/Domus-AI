@@ -14,27 +14,29 @@ This project may be used as a package for other projects, or as a standalone too
 
 ## Project Structure and Architecture
 The main pieces that comprise Domus-AI are:
+### DomusAPI - Simplified API
+The simplified general API for usage - a wrapper around Hestia's stronger more detailed API
+
 ### Hestia - General Runtime
-The hearth of Domus-AI. It is the main subsytem for operating with in Domus' local AI environment. It is responsible for Initializing subsytems, dependency injection and exposing a unified API that Domus-API wraps around. It is also the home for hardware and system detection. 
+The hearth of Domus-AI. It is the main subsytem for operating within Domus' local AI environment. It is responsible for Initializing subsytems, dependency injection and exposing a unified API that Domus-API wraps around. It is also the home for hardware and system detection. 
 
 ### Janus - Runtime State
 The threshold users must cross for runtime capabilities. It is responsible for the runtime state, the CLI, Configuration laoding, other susbsystem lifecycles, startup and shutdown, and component registration.
 
-### Mercurius - Event Bus
+### Mercurius - Event Bus (Not yet Implemented)
 The messenger of the entire environment. It is tied directly to Janus and is instantiated when Janus starts its processes. It is responsible for sending messages, broadcasting events, subsystem coordination, and other lifecycle hooks.
 
-### Custos - Security and MCP
+### Custos - Security and MCP (Not yet Implemented / Stubbed)
 The security guard of Domus-AI. It is the home for permissions, trusts, approvals and sandboxing. It also holds the Model Context Protocol(MCP) Manager that agents must work through when performing tasks actions, or gaining access to any systems.
 
-### Mentis - Context and Memory
+### Mentis - Context and Memory (Not yet Implemented - Memory)
 The memory and mind of the Domus environment. It is responsible for session management, persistent user and project memories, preferences, and contextual awareness.
 
-### Lares - Agents
+### Lares - Agents (Not yet Implemented)
 The spirits of the home (Domus). Is responsible for persistent helpers, personalized agents, specialized agents and general assistants.
 
-### Faber - Actions
+### Faber - Actions (Not yet Implemented)
 The actions, tools and workflows of the Lares. Handles no intelligence, thought or planning. Is only responsible for facilitating actions and executing work needed by the Lares. Can handle simple things like automation, scripting and external actions like Git.
-
 
 -----------------------------------------------------
 
@@ -46,6 +48,7 @@ The actions, tools and workflows of the Lares. Handles no intelligence, thought 
 ### Required Python Packages
 - psutil: v5.9.0 (or greater) for CPU, RAM, and GPU usage monitoring
 - packaging: v23.0 (or greater) for version comparison in dependency checks
+- python-dotenv: v1.0 (or greater) for .env file support
 - nvidia-ml-py: v12.0.0 (or greater) for GPU monitoring (if using NVIDIA GPUs)
 
 ### Optional Dependencies

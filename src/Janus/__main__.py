@@ -1,10 +1,10 @@
 """
 Entry point for `python -m Janus <command>`.
-
+ 
 Janus owns the CLI and acts as the runtime orchestrator, dispatching into
-Hestia (hardware), and the not-yet-relocated runtime/ modules (Faber/Custos
-territory: session, models, ollama_service, claude, mcp) as they move.
-
+Hestia (hardware), Faber (session/model/ollama/claude execution), Mentis
+(context/memory), and Custos (MCP/security) as needed.
+ 
 Actual argument parsing and command handling lives in main.py so it can be
 imported and tested independently of this shim.
 """

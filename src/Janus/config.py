@@ -1,10 +1,11 @@
 # Reads all configuration files - models.json, ollama.env, claude.json, and runtime.json.
-import json
 import os
 import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
+
+from utils import load_json
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ def _get_config_dir() -> Path:
     """Get the config directory path."""
     # Config should be relative to project root
     try:
-        from Janus.paths import find_root
+        from .paths import find_root
         return find_root() / "config"
     except Exception:
         # Fallback: look for config directory relative to this file
@@ -63,28 +64,21 @@ def load_models_config() -> Dict[str, Any]:
     """
     if _config_cache["models"] is not None:
         return _config_cache["models"]
-    
+
     try:
         config_dir = _get_config_dir()
-        models_file = config_dir / "models.json"
-        
-        if not models_file.exists():
-            logger.warning(f"models.json not found at {models_file}")
-            return {}
-        
-        with open(models_file, 'r') as f:
-            models = json.load(f)
-        
-        logger.info(f"Loaded {len(models)} model configurations")
-        _config_cache["models"] = models
-        return models
-        
-    except json.JSONDecodeError as e:
-        logger.error(f"Error parsing models.json: {e}")
-        return {}
     except Exception as e:
         logger.error(f"Error loading models config: {e}")
         return {}
+
+    models_file = config_dir / "models.json"
+    models = load_json(models_file, default={}, logger=logger)
+
+    if models:
+        logger.info(f"Loaded {len(models)} model configurations")
+        _config_cache["models"] = models
+
+    return models
 
 def load_claude_config() -> Dict[str, Any]:
     """
@@ -95,28 +89,21 @@ def load_claude_config() -> Dict[str, Any]:
     """
     if _config_cache["claude"] is not None:
         return _config_cache["claude"]
-    
+
     try:
         config_dir = _get_config_dir()
-        claude_file = config_dir / "claude.json"
-        
-        if not claude_file.exists():
-            logger.warning(f"claude.json not found at {claude_file}")
-            return {}
-        
-        with open(claude_file, 'r') as f:
-            config = json.load(f)
-        
-        logger.info("Loaded Claude configuration")
-        _config_cache["claude"] = config
-        return config
-        
-    except json.JSONDecodeError as e:
-        logger.error(f"Error parsing claude.json: {e}")
-        return {}
     except Exception as e:
         logger.error(f"Error loading Claude config: {e}")
         return {}
+
+    claude_file = config_dir / "claude.json"
+    config = load_json(claude_file, default={}, logger=logger)
+
+    if config:
+        logger.info("Loaded Claude configuration")
+        _config_cache["claude"] = config
+
+    return config
 
 def load_runtime_config() -> Dict[str, Any]:
     """
@@ -127,28 +114,21 @@ def load_runtime_config() -> Dict[str, Any]:
     """
     if _config_cache["runtime"] is not None:
         return _config_cache["runtime"]
-    
+
     try:
         config_dir = _get_config_dir()
-        runtime_file = config_dir / "runtime.json"
-        
-        if not runtime_file.exists():
-            logger.warning(f"runtime.json not found at {runtime_file}")
-            return {}
-        
-        with open(runtime_file, 'r') as f:
-            config = json.load(f)
-        
-        logger.info("Loaded runtime configuration")
-        _config_cache["runtime"] = config
-        return config
-        
-    except json.JSONDecodeError as e:
-        logger.error(f"Error parsing runtime.json: {e}")
-        return {}
     except Exception as e:
         logger.error(f"Error loading runtime config: {e}")
         return {}
+
+    runtime_file = config_dir / "runtime.json"
+    config = load_json(runtime_file, default={}, logger=logger)
+
+    if config:
+        logger.info("Loaded runtime configuration")
+        _config_cache["runtime"] = config
+
+    return config
 
 def get_model_config(model_name: str) -> Optional[Dict[str, Any]]:
     """

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "domus-ai"
+version = "0.1.0"
+description = "Domus-AI: local AI runtime with hardware detection, model management, and agent subsystems."
+requires-python = ">=3.10"
+dependencies = [
+    "psutil>=5.9.0",
+    "packaging>=23.0",
+    "nvidia-ml-py>=12.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+# Explicit package list rather than find_packages(), since the subsystem
+# packages (Hestia, Janus, Mentis, Faber, Custos, Mercurius, Lares,
+# DomusAPI) don't share a common namespace prefix — each is independently
+# top-level under src/.
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["utils"]
+
+[tool.setuptools.packages]
+find = { where = ["src"] }

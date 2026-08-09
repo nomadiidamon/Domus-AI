@@ -23,21 +23,21 @@ import shutil
 import traceback
 from pathlib import Path
 
-# Make the project's top-level packages (runtime, Hestia, Janus, ...)
-# importable regardless of where this script is invoked from, by adding
-# the PROJECT ROOT (not any subpackage dir) to sys.path. Each subpackage
-# has its own __init__.py and uses relative imports internally; cross-
-# package imports (e.g. Mentis/context.py importing Janus.paths) use
-# absolute imports since sibling packages can't use relative imports
-# across package boundaries.
+# Make the project's top-level packages (Hestia, Janus, Mentis, Faber,
+# Custos, Mercurius, Lares, DomusAPI, utils) importable regardless of
+# where this script is invoked from, by adding src/ to sys.path — that's
+# where all of them actually live. Each subpackage has its own __init__.py
+# and uses relative imports internally; cross-package imports (e.g.
+# Mentis/context.py importing Janus.paths) use absolute imports since
+# sibling packages can't use relative imports across package boundaries.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-RUNTIME_DIR = PROJECT_ROOT / "runtime"
+SRC_DIR = PROJECT_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 # All writable output this test needs (a fake "host project" dir, temp files,
-# etc.) goes here — NEVER inside PROJECT_ROOT or RUNTIME_DIR. Wiped clean at
-# the start of every run so tests stay isolated and repeatable.
+# etc.) goes here — NEVER inside PROJECT_ROOT. Wiped clean at the start of
+# every run so tests stay isolated and repeatable.
 TEST_OUTPUT_DIR = Path(__file__).resolve().parent / ".smoke_test_output"
 
 
@@ -158,6 +158,23 @@ def check_session_lifecycle():
     return "create/get/stop cycle ok"
 
 
+def check_utils_module():
+    """utils.py lives at the project root, shared equally by every subsystem."""
+    import utils
+    assert hasattr(utils, "configure_logging")
+    assert hasattr(utils, "load_json")
+
+    # load_json: missing file returns the given default, no exception
+    missing = utils.load_json(PROJECT_ROOT / "no_such_file.json", default={"x": 1})
+    assert missing == {"x": 1}, f"expected default for missing file, got {missing}"
+
+    # load_json: real file parses correctly
+    real = utils.load_json(PROJECT_ROOT / "config" / "models.json", default=None)
+    assert real is not None and isinstance(real, dict), "expected config/models.json to parse"
+
+    return "configure_logging + load_json both work as expected"
+
+
 def check_dependencies_module():
     from Janus.dependencies import DependencyChecker, PythonPackageDependency
     checker = DependencyChecker()
@@ -178,9 +195,25 @@ def check_context_module():
 
 
 def check_mcp_stub():
-    from runtime import mcp
+    from Custos import mcp
     assert hasattr(mcp, "MCPManager")
     return "imported ok"
+
+
+def check_stub_packages_import():
+    """
+    Mercurius (event bus), Lares (agents), and DomusAPI (top-level wrapper)
+    have no real implementation yet — this just confirms the package tree
+    itself is well-formed (each has a valid __init__.py) so the target
+    structure holds together even before the real code lands.
+    """
+    import Mercurius
+    import Lares
+    import DomusAPI
+    assert hasattr(Mercurius, "__all__")
+    assert hasattr(Lares, "__all__")
+    assert hasattr(DomusAPI, "__all__")
+    return "Mercurius, Lares, DomusAPI import ok (stubs, no behavior yet)"
 
 
 def check_cli_module_imports():
@@ -193,12 +226,18 @@ def check_cli_module_imports():
     "help" command via subprocess to catch import errors that only surface
     at call time.
 
+    NOTE: this runs `python -m Janus` in a genuinely separate subprocess,
+    which does NOT inherit this script's own sys.path — so this check
+    fails with "No module named Janus" if src/ isn't reachable some other
+    way. We set PYTHONPATH explicitly below so this works whether or not
+    `pip install -e .` has been run yet.
+
     IMPORTANT: running main.py triggers RuntimeContext.startup(), which
     creates a .ai-runtime/ working directory (cache, logs, models, memory,
     config, sessions) inside whatever it considers the "host project."
-    We must NEVER let that land inside this repo's own runtime/ folder or
-    project root. We redirect it via LOCAL_AI_RUNTIME_HOST to an isolated,
-    disposable directory under TEST_OUTPUT_DIR instead.
+    We must NEVER let that land inside this repo's own project root or any
+    subsystem package. We redirect it via LOCAL_AI_RUNTIME_HOST to an
+    isolated, disposable directory under TEST_OUTPUT_DIR instead.
     """
     from Janus import main  # noqa: F401
     assert hasattr(main, "main")
@@ -208,6 +247,17 @@ def check_cli_module_imports():
 
     env = dict(os.environ)
     env["LOCAL_AI_RUNTIME_HOST"] = str(host_dir)
+    # `python -m Janus` only resolves if src/ is on the subprocess's own
+    # PYTHONPATH — it does NOT inherit sys.path from this (parent) process.
+    # Normally `pip install -e .` (see pyproject.toml) puts src/ on the
+    # path permanently; this covers the case where the package hasn't
+    # been installed yet, so the smoke test doesn't depend on install
+    # order.
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (
+        str(SRC_DIR) if not existing_pythonpath
+        else f"{SRC_DIR}{os.pathsep}{existing_pythonpath}"
+    )
 
     import subprocess
     try:
@@ -231,15 +281,19 @@ def check_cli_module_imports():
     # test dir and NOT inside the real project. Checks both the proper
     # ".ai-runtime" working-dir name AND the bare directory names
     # (cache/logs/models/memory/config/sessions) in case some code path
-    # bypasses paths.py and writes them directly into project_dir.
+    # bypasses paths.py and writes them directly into a package dir.
     suspects = ["cache", "logs", "models", "memory", "config", "sessions", ".ai-runtime"]
+    subsystem_dirs = [
+        SRC_DIR / name
+        for name in ("Hestia", "Janus", "Mentis", "Faber", "Custos", "Mercurius", "Lares", "DomusAPI")
+    ]
     leaked = []
-    for base in (PROJECT_ROOT, RUNTIME_DIR):
+    for base in [PROJECT_ROOT, *subsystem_dirs]:
         for name in suspects:
             candidate = base / name
-            # "config" and "models" legitimately exist as real project dirs;
-            # only flag them if they look freshly created by this test run
-            # (i.e. contain the host marker or known host subfolders).
+            # "config" and "models" legitimately exist as real project dirs
+            # at PROJECT_ROOT; only flag them elsewhere (a subsystem dir
+            # should never have its own bare cache/config/models/etc.).
             if name in ("config", "models") and base == PROJECT_ROOT:
                 continue
             if candidate.exists():
@@ -259,12 +313,14 @@ def check_full_diagnostic():
 CORE_CHECKS = [
     ("Janus.paths.find_root", check_paths_resolve),
     ("Janus.config.* loads config/*.json", check_config_loads),
+    ("utils.configure_logging / load_json", check_utils_module),
     ("Hestia.hardware.detect_hardware", check_hardware_detection),
     ("Hestia.model_catalog imports", check_model_catalog_import),
     ("Janus.dependencies.DependencyChecker", check_dependencies_module),
     ("Faber.session create/get/stop cycle", check_session_lifecycle),
     ("Mentis.context module imports", check_context_module),
-    ("mcp.MCPManager stub imports", check_mcp_stub),
+    ("Custos.mcp.MCPManager stub imports", check_mcp_stub),
+    ("Mercurius/Lares/DomusAPI stub packages import", check_stub_packages_import),
     ("Janus (python -m Janus) CLI", check_cli_module_imports),
 ]
 
@@ -285,7 +341,7 @@ def main():
 
     print(f"Domus-AI smoke test")
     print(f"Project root: {PROJECT_ROOT}")
-    print(f"Runtime dir:  {RUNTIME_DIR}")
+    print(f"Subsystems:   Hestia, Janus, Mentis, Faber, Custos, Mercurius, Lares, DomusAPI")
     print(f"Test output:  {TEST_OUTPUT_DIR} (isolated, wiped each run)")
     print("-" * 60)
 
