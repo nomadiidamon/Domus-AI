@@ -10,6 +10,8 @@ src/Lares/__pycache__/
 src/Mentis/__pycache__/
 src/Mercurius/__pycache__/
 
+.vscode/
+
 .pytest_cache/
 
 build/

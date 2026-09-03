@@ -379,21 +379,30 @@ class SystemCommandDependency(Dependency):
     def _repair_linux(self) -> Tuple[bool, str]:
         """Repair on Linux."""
         try:
-            # Try apt-get first
-            cmd = ["sudo", "apt-get", "install", "-y", self.command_name]
+            pkg_manager = shutil.which("apt-get") or shutil.which("yum") or shutil.which("dnf") or shutil.which("pacman")
+            if not pkg_manager:
+                return False, "No supported package manager found (apt-get, yum, dnf, pacman)"
+
+            cmd = []
+
+            if "apt-get" in pkg_manager:
+                cmd = ["sudo", "apt-get", "install", "-y", self.command_name]
+            elif "yum" in pkg_manager:
+                cmd = ["sudo", "yum", "install", "-y", self.command_name]
+            elif "dnf" in pkg_manager:
+                cmd = ["sudo", "dnf", "install", "-y", self.command_name]
+            elif "pacman" in pkg_manager:
+                cmd = ["sudo", "pacman", "-S", "--noconfirm", self.command_name]
+            else:
+                return False, "Unsupported package manager"
+
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-            
+
             if result.returncode == 0:
-                return True, f"Installed {self.command_name} via apt-get"
-            
-            # Try yum
-            cmd = ["sudo", "yum", "install", "-y", self.command_name]
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-            
-            if result.returncode == 0:
-                return True, f"Installed {self.command_name} via yum"
-            
-            return False, "Installation failed on Linux"
+                return True, f"Installed {self.command_name} via {pkg_manager}"
+            else:
+                error_msg = result.stderr or result.stdout
+                return False, f"Linux installation failed: {error_msg}"
         
         except Exception as e:
             return False, f"Linux installation error: {str(e)}"
@@ -422,7 +431,18 @@ class SystemCommandDependency(Dependency):
         system = platform.system()
         
         if system == "Linux":
-            return f"sudo apt-get install {self.command_name}"
+            package_manager = shutil.which("apt-get") or shutil.which("yum") or shutil.which("dnf") or shutil.which("pacman")
+            if package_manager:
+                if "apt-get" in package_manager:
+                    return f"sudo apt-get install {self.command_name}"
+                elif "yum" in package_manager:
+                    return f"sudo yum install {self.command_name}"
+                elif "dnf" in package_manager:
+                    return f"sudo dnf install {self.command_name}"
+                elif "pacman" in package_manager:
+                    return f"sudo pacman -S {self.command_name}"
+                else:
+                    return f"Install {self.command_name} using your package manager"
         elif system == "Darwin":
             return f"brew install {self.command_name}"
         elif system == "Windows":

@@ -164,17 +164,26 @@ class TestSystemCommandDependency:
         assert result.status == DependencyStatus.BROKEN
 
     @pytest.mark.parametrize(
-        "system,expected_snippet",
+        "system,which_returns,expected_snippet",
         [
-            ("Linux", "apt-get install"),
-            ("Darwin", "brew install"),
-            ("Windows", "Download and install"),
+            ("Linux", "apt-get", "apt-get install"),
+            ("Linux", "dnf", "dnf install"),
+            ("Linux", "pacman", "pacman -S"),
+            ("Linux", "yum", "yum install"),
+            ("Linux", None, "manually"),  # no package manager found
+            ("Darwin", None, "brew install"),
+            ("Windows", None, "Download and install"),
         ],
-    )
-    def test_get_install_instructions_per_platform(self, system, expected_snippet):
+        )
+    
+    def test_get_install_instructions_per_platform(self, system, which_returns, expected_snippet):
         dep = SystemCommandDependency("git")
-        with patch("platform.system", return_value=system):
+        fake_which = lambda cmd: f"/usr/bin/{cmd}" if cmd == which_returns else None
+
+        with patch("platform.system", return_value=system), \
+            patch("shutil.which", side_effect=fake_which):
             instructions = dep.get_install_instructions()
+
         assert expected_snippet in instructions
 
     def test_repair_windows_not_supported(self):
@@ -184,18 +193,36 @@ class TestSystemCommandDependency:
         assert success is False
         assert "not supported" in message.lower()
 
-    def test_repair_linux_tries_apt_then_yum(self):
+
+    @pytest.mark.parametrize(
+    "which_returns",
+    ["apt-get", "yum", "dnf", "pacman"],
+    )
+
+    def test_repair_linux_uses_detected_package_manager(self, which_returns):
         dep = SystemCommandDependency("git")
-        apt_fail = MagicMock(returncode=1)
-        yum_ok = MagicMock(returncode=0)
+        ok_result = MagicMock(returncode=0)
+        fake_which = lambda cmd: f"/usr/bin/{cmd}" if cmd == which_returns else None
 
         with patch("platform.system", return_value="Linux"), \
-             patch("subprocess.run", side_effect=[apt_fail, yum_ok]) as mock_run:
+            patch("shutil.which", side_effect=fake_which), \
+            patch("subprocess.run", return_value=ok_result) as mock_run:
             success, message = dep.repair()
 
         assert success is True
-        assert mock_run.call_count == 2
-        assert "yum" in message
+        assert mock_run.call_count == 1
+        assert which_returns in mock_run.call_args[0][0]
+        assert which_returns in message
+
+    def test_repair_linux_no_package_manager_found(self):
+        dep = SystemCommandDependency("git")
+
+        with patch("platform.system", return_value="Linux"), \
+            patch("shutil.which", return_value=None):
+            success, message = dep.repair()
+
+        assert success is False
+        assert "No supported package manager" in message
 
 
 # ---------------------------------------------------------------------------
