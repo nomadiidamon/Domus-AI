@@ -12,5 +12,7 @@ src/Mercurius/__pycache__/
 
 .pytest_cache/
 
+build/
+
 *.pyc
 tests/.smoke_test_output/
