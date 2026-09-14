@@ -18,3 +18,5 @@ build/
 
 *.pyc
 tests/.smoke_test_output/
+test-output.log
+
