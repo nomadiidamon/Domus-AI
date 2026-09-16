@@ -54,6 +54,25 @@ class TestHandleStart:
         assert "mercury" in captured.out
         assert "running" in captured.out
 
+    def test_publishes_model_loaded_event_on_success(self):
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main.start_model"), \
+             patch("Janus.main.publish_event") as mock_publish:
+            main.handle_start(["mercury"])
+        mock_publish.assert_called_once_with(
+            main.EventType.MODEL_LOADED,
+            source="janus",
+            payload={"model": "mercury"},
+        )
+
+    def test_no_event_published_when_start_fails(self):
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main.start_model", side_effect=RuntimeError("boom")), \
+             patch("Janus.main.publish_event") as mock_publish:
+            with pytest.raises(SystemExit):
+                main.handle_start(["mercury"])
+        mock_publish.assert_not_called()
+
 
 class TestHandleStop:
     def test_stops_specific_model_when_given(self):
@@ -81,6 +100,22 @@ class TestHandleStop:
             with pytest.raises(SystemExit) as exc_info:
                 main.handle_stop(["mercury"])
         assert exc_info.value.code == 1
+
+    def test_publishes_model_unloaded_event_on_successful_stop(self):
+        with patch("Janus.main.stop_model", return_value=True), \
+             patch("Janus.main.publish_event") as mock_publish:
+            main.handle_stop(["mercury"])
+        mock_publish.assert_called_once_with(
+            main.EventType.MODEL_UNLOADED,
+            source="janus",
+            payload={"model": "mercury"},
+        )
+
+    def test_no_event_published_when_model_not_running(self):
+        with patch("Janus.main.stop_model", return_value=False), \
+             patch("Janus.main.publish_event") as mock_publish:
+            main.handle_stop(["mercury"])
+        mock_publish.assert_not_called()
 
 
 class TestHandleStatus:
@@ -131,6 +166,63 @@ class TestHandleBuild:
         assert exc_info.value.code == 1
 
 
+class TestHandlePull:
+    def test_exits_1_when_no_model_given(self):
+        with pytest.raises(SystemExit) as exc_info:
+            main.handle_pull([])
+        assert exc_info.value.code == 1
+
+    def test_calls_pull_model(self):
+        with patch("Janus.main.pull_model") as mock_pull:
+            main.handle_pull(["qwen2.5:0.5b"])
+        mock_pull.assert_called_once_with("qwen2.5:0.5b")
+
+    def test_exits_1_on_exception(self):
+        with patch("Janus.main.pull_model", side_effect=RuntimeError("boom")):
+            with pytest.raises(SystemExit) as exc_info:
+                main.handle_pull(["mercury"])
+        assert exc_info.value.code == 1
+
+
+class TestHandleList:
+    def test_prints_models(self, capsys):
+        models = [{"name": "mercury:latest", "id": "abc", "size": "4.7 GB", "modified": "3 days ago"}]
+        with patch("Janus.main.list_models", return_value=models):
+            main.handle_list([])
+        captured = capsys.readouterr()
+        assert "mercury:latest" in captured.out
+        assert "4.7 GB" in captured.out
+
+    def test_prints_hint_when_no_models(self, capsys):
+        with patch("Janus.main.list_models", return_value=[]):
+            main.handle_list([])
+        assert "No models installed" in capsys.readouterr().out
+
+    def test_exits_1_on_exception(self):
+        with patch("Janus.main.list_models", side_effect=RuntimeError("boom")):
+            with pytest.raises(SystemExit) as exc_info:
+                main.handle_list([])
+        assert exc_info.value.code == 1
+
+
+class TestHandleRemove:
+    def test_exits_1_when_no_model_given(self):
+        with pytest.raises(SystemExit) as exc_info:
+            main.handle_remove([])
+        assert exc_info.value.code == 1
+
+    def test_calls_remove_model(self):
+        with patch("Janus.main.remove_model") as mock_remove:
+            main.handle_remove(["mercury"])
+        mock_remove.assert_called_once_with("mercury")
+
+    def test_exits_1_on_exception(self):
+        with patch("Janus.main.remove_model", side_effect=RuntimeError("boom")):
+            with pytest.raises(SystemExit) as exc_info:
+                main.handle_remove(["mercury"])
+        assert exc_info.value.code == 1
+
+
 class TestHandleDoctor:
     def test_prints_success_when_diagnostic_passes(self, capsys):
         with patch("Janus.main.full_diagnostic", return_value=True):
@@ -162,10 +254,49 @@ class TestHandleMcp:
             main.handle_mcp(["launch", "mercury"])
         mock_launch.assert_called_once_with(["mercury"])
 
+    def test_dispatches_tools_action(self):
+        with patch("Janus.main.handle_mcp_tools") as mock_tools:
+            main.handle_mcp(["tools", "Mercury"])
+        mock_tools.assert_called_once_with(["Mercury"])
+
     def test_unknown_action_prints_warning_without_raising(self, capsys):
         main.handle_mcp(["frobnicate"])
         captured = capsys.readouterr()
         assert "not yet fully implemented" in captured.out
+
+
+class TestHandleMcpTools:
+    def test_exits_1_when_no_model_given(self):
+        with pytest.raises(SystemExit) as exc_info:
+            main.handle_mcp_tools([])
+        assert exc_info.value.code == 1
+
+    def test_prints_tools_grouped_by_server(self, capsys):
+        fake_manager = MagicMock()
+        fake_manager.get_tools.return_value = {
+            "filesystem": ["read_file", "list_directory"],
+            "git": ["*"],
+        }
+        with patch("Custos.mcp.MCPManager", return_value=fake_manager):
+            main.handle_mcp_tools(["mercury"])
+
+        captured = capsys.readouterr()
+        assert "mercury" in captured.out
+        assert "filesystem: read_file, list_directory" in captured.out
+        assert "git: *" in captured.out
+
+    def test_prints_none_when_profile_has_no_tools(self, capsys):
+        fake_manager = MagicMock()
+        fake_manager.get_tools.return_value = {}
+        with patch("Custos.mcp.MCPManager", return_value=fake_manager):
+            main.handle_mcp_tools(["mercury"])
+        assert "none" in capsys.readouterr().out
+
+    def test_exits_1_on_manager_error(self):
+        with patch("Custos.mcp.MCPManager", side_effect=RuntimeError("bad config")):
+            with pytest.raises(SystemExit) as exc_info:
+                main.handle_mcp_tools(["mercury"])
+        assert exc_info.value.code == 1
 
 
 class TestHandleMcpLaunch:

@@ -13,7 +13,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Set
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields, asdict
 from enum import Enum
 import threading
 
@@ -44,6 +44,13 @@ class ContextEventType(Enum):
     ERROR = "error"
     WARNING = "warning"
     STATE_CHANGED = "state_changed"
+    # Conversation traffic to/from models
+    MESSAGE_SENT = "message_sent"
+    MESSAGE_RECEIVED = "message_received"
+    # Memory operations (condense/store/remember)
+    CONVERSATION_CONDENSED = "conversation_condensed"
+    MEMORY_STORED = "memory_stored"
+    USER_MEMORY_UPDATED = "user_memory_updated"
 
 
 @dataclass
@@ -69,6 +76,8 @@ class AIMemory:
     """AI system memory and learning state."""
     conversation_history: List[Dict[str, str]] = field(default_factory=list)
     learned_preferences: Dict[str, Any] = field(default_factory=dict)
+    conversation_notes: List[Dict[str, Any]] = field(default_factory=list)
+    user_memory: Dict[str, Any] = field(default_factory=dict)
     system_instructions: str = ""
     context_window_size: int = 8192
     memory_limit_entries: int = 1000
@@ -95,14 +104,74 @@ class AIMemory:
     def clear_history(self):
         """Clear conversation history."""
         self.conversation_history = []
+
+    def condense_history(self, keep_recent: int = 10) -> Optional[Dict[str, Any]]:
+        """
+        Fold all but the most recent messages into a single summary note in
+        conversation_notes, freeing context window space. The note is a
+        transcript ("role: content" lines), not a model-generated summary -
+        callers wanting a smarter condensation can generate one via
+        Faber.messaging and pass it to store_note() instead.
+
+        Returns the note created, or None if there was nothing to condense.
+        """
+        if len(self.conversation_history) <= keep_recent:
+            return None
+
+        to_condense = self.conversation_history[:-keep_recent]
+        transcript = "\n".join(
+            f"{entry['role']}: {entry['content']}" for entry in to_condense
+        )
+        note = self.store_note(
+            transcript,
+            kind="condensed_conversation",
+            source="condense_history",
+            condensed_count=len(to_condense),
+        )
+        self.conversation_history = self.conversation_history[-keep_recent:]
+        return note
+
+    def store_note(self, content: str, kind: str = "note", **extra) -> Dict[str, Any]:
+        """
+        Store a durable note tied to the conversation ("store this in
+        conversation memory"). Unlike conversation_history, notes are never
+        trimmed by memory_limit_entries and survive condense_history().
+        """
+        note = {
+            'timestamp': datetime.now().isoformat(),
+            'kind': kind,
+            'content': content,
+            **extra,
+        }
+        self.conversation_notes.append(note)
+        return note
+
+    def remember(self, key: str, value: Any) -> None:
+        """
+        Store a fact in permanent user memory ("add this to permanent user
+        memory") - durable preferences/facts about the user, persisted with
+        the rest of AIMemory on shutdown.
+        """
+        self.user_memory[key] = {
+            'value': value,
+            'updated_at': datetime.now().isoformat(),
+        }
+
+    def recall(self, key: str, default: Any = None) -> Any:
+        """Read back a value from permanent user memory."""
+        entry = self.user_memory.get(key)
+        return entry['value'] if entry is not None else default
     
     def to_dict(self) -> dict:
         """Convert to dictionary."""
         return {
             'conversation_history': self.conversation_history,
             'learned_preferences': self.learned_preferences,
+            'conversation_notes': self.conversation_notes,
+            'user_memory': self.user_memory,
             'system_instructions': self.system_instructions,
             'context_window_size': self.context_window_size,
+            'memory_limit_entries': self.memory_limit_entries,
         }
 
 
@@ -518,7 +587,7 @@ class RuntimeContext:
     ):
         """
         Log a runtime event.
-        
+
         Args:
             event_type: Type of event
             message: Event message
@@ -537,6 +606,66 @@ class RuntimeContext:
             # Maintain size limit
             if len(self.events) > self.max_events_memory:
                 self.events = self.events[-self.max_events_memory:]
+
+        # Bridge to the Mercurius bus outside the lock - publish_event is a
+        # no-op when no bus is running, so Mentis stays usable standalone.
+        try:
+            from Mercurius import EventType as BusEventType, publish_event
+            bus_type = {
+                ContextEventType.STARTUP: BusEventType.STARTUP,
+                ContextEventType.SHUTDOWN: BusEventType.SHUTDOWN,
+                ContextEventType.MODEL_LOADED: BusEventType.MODEL_LOADED,
+                ContextEventType.MODEL_UNLOADED: BusEventType.MODEL_UNLOADED,
+                ContextEventType.ERROR: BusEventType.ERROR,
+                ContextEventType.WARNING: BusEventType.WARNING,
+                ContextEventType.MESSAGE_SENT: BusEventType.MESSAGE_SENT,
+                ContextEventType.MESSAGE_RECEIVED: BusEventType.MESSAGE_RECEIVED,
+                ContextEventType.CONVERSATION_CONDENSED: BusEventType.CONVERSATION_CONDENSED,
+                ContextEventType.MEMORY_STORED: BusEventType.MEMORY_STORED,
+                ContextEventType.USER_MEMORY_UPDATED: BusEventType.USER_MEMORY_UPDATED,
+            }.get(event_type, BusEventType.CUSTOM)
+            publish_event(
+                bus_type,
+                source="mentis",
+                payload={"message": message, "metadata": metadata or {}},
+            )
+        except Exception:
+            logger.debug("Mercurius bus unavailable; event not published", exc_info=True)
+
+    def condense_conversation(self, keep_recent: int = 10) -> Optional[Dict[str, Any]]:
+        """Condense conversation history, keeping only the most recent messages."""
+        with self._lock:
+            before = len(self.ai_memory.conversation_history)
+            note = self.ai_memory.condense_history(keep_recent=keep_recent)
+            if note is None:
+                return None
+            self.log_event(
+                ContextEventType.CONVERSATION_CONDENSED,
+                "Conversation condensed",
+                {'condensed_messages': before - keep_recent, 'kept_recent': keep_recent},
+            )
+            return note
+
+    def store_conversation_note(self, content: str, kind: str = "note", **extra) -> Dict[str, Any]:
+        """Store a durable note in conversation memory."""
+        with self._lock:
+            note = self.ai_memory.store_note(content, kind=kind, **extra)
+            self.log_event(
+                ContextEventType.MEMORY_STORED,
+                "Conversation note stored",
+                {'kind': kind, 'note': note},
+            )
+            return note
+
+    def remember_user_fact(self, key: str, value: Any) -> None:
+        """Store a fact in permanent user memory."""
+        with self._lock:
+            self.ai_memory.remember(key, value)
+            self.log_event(
+                ContextEventType.USER_MEMORY_UPDATED,
+                "User memory updated",
+                {'key': key, 'value': value},
+            )
     
     def update_ai_memory(
         self,
@@ -618,26 +747,48 @@ class RuntimeContext:
             }
     
     def _load_saved_state(self):
-        """Load previously saved state from disk."""
+        """Load previously saved state from disk into this context."""
         try:
-            # Load config if exists
             config_file = self.config_dir / "config.json"
             if config_file.exists():
                 with open(config_file, 'r') as f:
                     config_data = json.load(f)
-                    # Merge with defaults
-                    logger.info(f"Loaded saved config from {config_file}")
-            
-            # Load AI memory if exists
+                self._restore_config(config_data)
+                logger.info(f"Loaded saved config from {config_file}")
+
             memory_file = self.memory_dir / "ai_memory.json"
             if memory_file.exists():
                 with open(memory_file, 'r') as f:
                     memory_data = json.load(f)
-                    # Restore memory
-                    logger.info(f"Loaded saved AI memory from {memory_file}")
-                    
+                self._restore_memory(memory_data)
+                logger.info(f"Loaded saved AI memory from {memory_file}")
+
         except Exception as e:
             logger.warning(f"Error loading saved state: {e}")
+
+    def _restore_config(self, config_data: dict):
+        """Merge a saved config dict into self.config, ignoring unknown keys."""
+        valid_keys = {f.name for f in fields(ProjectConfig)}
+        for key, value in config_data.items():
+            if key not in valid_keys:
+                continue
+            if key == 'model_size_preference':
+                value = ModelSize(value)
+            setattr(self.config, key, value)
+
+    def _restore_memory(self, memory_data: dict):
+        """Restore saved AI memory into self.ai_memory."""
+        self.ai_memory.conversation_history = memory_data.get('conversation_history', [])
+        self.ai_memory.learned_preferences = memory_data.get('learned_preferences', {})
+        self.ai_memory.conversation_notes = memory_data.get('conversation_notes', [])
+        self.ai_memory.user_memory = memory_data.get('user_memory', {})
+        self.ai_memory.system_instructions = memory_data.get('system_instructions', "")
+        self.ai_memory.context_window_size = memory_data.get(
+            'context_window_size', self.ai_memory.context_window_size
+        )
+        self.ai_memory.memory_limit_entries = memory_data.get(
+            'memory_limit_entries', self.ai_memory.memory_limit_entries
+        )
     
     def _save_state(self):
         """Save current state to disk."""

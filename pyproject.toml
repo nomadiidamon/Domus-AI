@@ -21,17 +21,21 @@ dependencies = [
 [project.urls]
 homepage = "https://github.com/nomadiidamon/Domus-AI"
 
+[project.scripts]
+janus = "Janus.main:main"
+Janus = "Janus.main:main"
+
 # Explicit package list rather than find_packages(), since the subsystem
 # packages (Hestia, Janus, Mentis, Faber, Custos, Mercurius, Lares,
 # DomusAPI) don't share a common namespace prefix - each is independently
 # top-level under src/.
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = {"" = "src", "mcp" = "mcp"}
 py-modules = ["utils"]
 
 [tool.setuptools.packages]
-find = { where = ["src"] }
+find = { where = ["src", "."], include = ["Hestia*", "Janus*", "Mentis*", "Faber*", "Custos*", "Mercurius*", "Lares*", "DomusAPI*", "mcp*"] }
 
 [tool.pytest.ini_options]
 
@@ -54,6 +58,7 @@ markers = [
     "mercurius: tests for the Mercurius subsystem (event bus) - currently a stub package",
     "domusapi: tests for the DomusAPI subsystem (top-level wrapper) - currently a stub package",
     "utils: tests for the shared utils module",
+    "e2e: end-to-end tests requiring a live Ollama server (deselect with '-m \"not e2e\"')",
 ]
 
 # Fail loudly on unknown markers.

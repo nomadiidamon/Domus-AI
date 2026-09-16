@@ -32,6 +32,10 @@ EXPECTED_EXPORTS = [
     "set_context",
     "ollama_launch_claude",
     "stop_claude",
+    "Message",
+    "ChatResponse",
+    "chat",
+    "generate",
 ]
 
 

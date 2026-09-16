@@ -1,3 +1,7 @@
 @echo off
-powershell.exe -ExecutionPolicy Bypass -NoProfile -File "%~dp0..\ps1\Status-AI.ps1"
-pause
+REM Shows status of running models and hardware.
+pushd "%~dp0..\.."
+python -m Janus status
+set EXITCODE=%errorlevel%
+popd
+exit /b %EXITCODE%

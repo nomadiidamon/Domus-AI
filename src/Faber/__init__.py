@@ -43,6 +43,13 @@ from .claude_service import (
     stop_claude,
 )
 
+from .messaging import (
+    Message,
+    ChatResponse,
+    chat,
+    generate,
+)
+
 __all__ = [
     # Session
     "Session",
@@ -70,4 +77,10 @@ __all__ = [
     # Claude
     "ollama_launch_claude",
     "stop_claude",
+
+    # Messaging
+    "Message",
+    "ChatResponse",
+    "chat",
+    "generate",
 ]

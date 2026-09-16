@@ -1,3 +1,4 @@
 @echo off
-powershell.exe -ExecutionPolicy Bypass -NoProfile -File "%~dp0..\ps1\Start-AI-Mercury.ps1"
-pause
+REM Starts the Mercury model via the generic Start-AI script.
+call "%~dp0Start-AI.bat" mercury
+exit /b %errorlevel%

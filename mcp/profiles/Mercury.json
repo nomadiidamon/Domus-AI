@@ -1,0 +1,9 @@
+{
+  "model": "Mercury",
+  "description": "Fast coding assistant - everyday development, debugging, feature work.",
+  "servers": ["filesystem", "git"],
+  "allowed_tools": {
+    "filesystem": ["read_file", "list_directory", "search_files", "write_file", "edit_file", "read_external_file"],
+    "git": ["git_status", "git_diff", "git_log", "git_add", "git_commit"]
+  }
+}

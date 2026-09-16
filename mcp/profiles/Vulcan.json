@@ -1,0 +1,10 @@
+{
+  "model": "Vulcan",
+  "description": "Heavy reasoning agent - difficult debugging, repository analysis, architecture. Broadest access.",
+  "servers": ["filesystem", "git", "fetch"],
+  "allowed_tools": {
+    "filesystem": ["*"],
+    "git": ["*"],
+    "fetch": ["fetch"]
+  }
+}

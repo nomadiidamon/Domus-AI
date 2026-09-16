@@ -1,0 +1,8 @@
+{
+  "model": "Minerva",
+  "description": "Lightweight assistant - scripts, explanations, quick fixes. Read-mostly access.",
+  "servers": ["filesystem"],
+  "allowed_tools": {
+    "filesystem": ["read_file", "list_directory", "search_files"]
+  }
+}

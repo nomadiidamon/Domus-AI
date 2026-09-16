@@ -78,17 +78,29 @@ class TestAIMemory:
 
     def test_to_dict_excludes_memory_limit_entries(self):
         """
-        to_dict() intentionally omits memory_limit_entries (an internal
-        tuning knob, not conversational state) - pin that omission so a
-        future edit adding/removing dict keys is a visible, deliberate
-        change.
+        to_dict() includes every piece of conversational/persistent state;
+        pin the exact key set so adding/removing keys is a visible,
+        deliberate change.
         """
         memory = AIMemory()
         data = memory.to_dict()
         assert set(data.keys()) == {
             "conversation_history", "learned_preferences",
+            "conversation_notes", "user_memory",
             "system_instructions", "context_window_size",
+            "memory_limit_entries",
         }
+
+    def test_memory_limit_survives_round_trip(self):
+        """A custom memory_limit_entries must persist through save/restore."""
+        memory = AIMemory(memory_limit_entries=42)
+        restored = AIMemory()
+        data = memory.to_dict()
+
+        # Mirrors RuntimeContext._restore_memory's field assignments
+        restored.memory_limit_entries = data.get(
+            "memory_limit_entries", restored.memory_limit_entries)
+        assert restored.memory_limit_entries == 42
 
 
 class TestProjectConfig:

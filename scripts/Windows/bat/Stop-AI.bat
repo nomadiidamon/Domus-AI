@@ -1,3 +1,7 @@
 @echo off
-powershell.exe -ExecutionPolicy Bypass -NoProfile -File "%~dp0..\ps1\Stop-AI.ps1"
-pause
+REM Stops a model, or all models and the Ollama server. Usage: Stop-AI.bat [model]
+pushd "%~dp0..\.."
+python -m Janus stop %~1
+set EXITCODE=%errorlevel%
+popd
+exit /b %EXITCODE%

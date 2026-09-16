@@ -1,1 +1,0 @@
-& "$PSScriptRoot\Start-AI.ps1" Minerva

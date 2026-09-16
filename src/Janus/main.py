@@ -5,8 +5,11 @@ from typing import Optional
 
 from Faber.ollama_service import start_ollama, stop_ollama
 from Faber.session import stop_session, get_status, get_all_sessions
-from Faber.models import start_model, stop_model, build_model
+from Faber.models import (
+    start_model, stop_model, build_model, pull_model, list_models, remove_model,
+)
 from Janus.doctor import full_diagnostic
+from Mercurius import EventType, initialize_bus, publish_event, shutdown_bus
 
 from utils import configure_logging
 
@@ -34,6 +37,15 @@ COMMANDS:
     
     build <model>       Build a custom model from Modelfile
                         Example: python -m Janus build mercury
+    
+    pull <model>        Download a model from the Ollama registry
+                        Example: python -m Janus pull qwen2.5:0.5b
+    
+    list                List models installed in Ollama
+                        Example: python -m Janus list
+    
+    remove <model>      Remove a model from Ollama
+                        Example: python -m Janus remove mercury
     
     doctor              Run diagnostic checks on your setup
                         Example: python -m Janus doctor
@@ -72,6 +84,7 @@ def handle_start(args: list) -> None:
         start_model(model)
         logger.info(f"Model '{model}' started successfully")
         print(f"[OK] Model '{model}' is running")  # <- USER FEEDBACK
+        publish_event(EventType.MODEL_LOADED, source="janus", payload={"model": model})
         
     except RuntimeError as e:
         logger.error(f"Failed to start model: {e}")
@@ -92,6 +105,7 @@ def handle_stop(args: list) -> None:
             if stop_model(model):
                 logger.info(f"Model '{model}' stopped successfully")
                 print(f"[OK] Model '{model}' stopped")
+                publish_event(EventType.MODEL_UNLOADED, source="janus", payload={"model": model})
             else:
                 logger.warning(f"Model '{model}' was not running")
                 print(f"[!] Model '{model}' was not running")
@@ -169,6 +183,66 @@ def handle_build(args: list) -> None:
         print(f"[X] Error: {e}")
         sys.exit(1)
 
+def handle_pull(args: list) -> None:
+    """Handle the 'pull' command."""
+    if len(args) < 1:
+        logger.error("'pull' command requires a model name")
+        print("Usage: python -m Janus pull <model>")
+        print("Example: python -m Janus pull qwen2.5:0.5b")
+        sys.exit(1)
+
+    model = args[0]
+    logger.info(f"Pulling model: {model}")
+
+    try:
+        pull_model(model)
+        logger.info(f"Model '{model}' pulled successfully")
+        print(f"[OK] Model '{model}' pulled")
+
+    except Exception as e:
+        logger.error(f"Failed to pull model: {e}")
+        print(f"[X] Error: {e}")
+        sys.exit(1)
+
+def handle_list(args: list) -> None:
+    """Handle the 'list' command."""
+    try:
+        models = list_models()
+        if not models:
+            print("No models installed")
+            print("  Pull one with: python -m Janus pull <model>")
+            return
+
+        print("\nInstalled models:")
+        for model in models:
+            print(f"  {model['name']:30} {model['size']:>10}  {model['modified']}")
+
+    except Exception as e:
+        logger.error(f"Failed to list models: {e}")
+        print(f"[X] Error: {e}")
+        sys.exit(1)
+
+def handle_remove(args: list) -> None:
+    """Handle the 'remove' command."""
+    if len(args) < 1:
+        logger.error("'remove' command requires a model name")
+        print("Usage: python -m Janus remove <model>")
+        print("Example: python -m Janus remove mercury")
+        sys.exit(1)
+
+    model = args[0]
+    logger.info(f"Removing model: {model}")
+
+    try:
+        remove_model(model)
+        logger.info(f"Model '{model}' removed")
+        print(f"[OK] Model '{model}' removed")
+
+    except Exception as e:
+        logger.error(f"Failed to remove model: {e}")
+        print(f"[X] Error: {e}")
+        sys.exit(1)
+
 def handle_doctor():
     """Handle the 'doctor' command."""
     logger.info("Running diagnostic checks...")
@@ -203,9 +277,39 @@ def handle_mcp(args: list) -> None:
     
     if action == "launch":
         handle_mcp_launch(args[1:])
+    elif action == "tools":
+        handle_mcp_tools(args[1:])
     else:
         print(f"[!] MCP functionality not yet fully implemented: {action}")
         # TODO: Implement other MCP functionality
+ 
+def handle_mcp_tools(args: list) -> None:
+    """Handle listing the MCP tools a model's profile permits."""
+    if len(args) < 1:
+        logger.error("'mcp tools' requires a model name")
+        print("Usage: python -m Janus mcp tools <model>")
+        print("Example: python -m Janus mcp tools Mercury")
+        sys.exit(1)
+
+    model = args[0]
+
+    try:
+        from Custos.mcp import MCPManager
+
+        manager = MCPManager()
+        tools = manager.get_tools(model)
+
+        print(f"MCP tools permitted for '{model}':")
+        if not tools:
+            print("  (none - profile has no servers/tools declared)")
+        for server, allowed in tools.items():
+            rendered = ", ".join(allowed) if allowed else "(no tools allowed)"
+            print(f"  {server}: {rendered}")
+
+    except Exception as e:
+        logger.error(f"Failed to list MCP tools: {e}")
+        print(f"[X] Error: {e}")
+        sys.exit(1)
  
 def handle_mcp_launch(args: list) -> None:
     """Handle launching Claude Code via Ollama."""
@@ -276,8 +380,15 @@ def main() -> int:
             handle_status() 
         elif command == "doctor":
             handle_doctor()
+        elif command == "list":
+            # Read-only query against the Ollama server - no RuntimeContext needed
+            handle_list(args)
+        elif command == "mcp" and args and args[0].lower() == "tools":
+            # Read-only config query - no RuntimeContext needed
+            handle_mcp_tools(args[1:])
         else:
             ctx = None
+            bus_running = False
             # Initialize runtime context and bind it to models
             try:
                 from Mentis.context import RuntimeContext
@@ -294,10 +405,14 @@ def main() -> int:
 
                 set_context(ctx)
 
+                initialize_bus()
+                publish_event(EventType.STARTUP, source="janus", payload={"command": command})
+                bus_running = True
+
             except Exception as e:
                 logger.warning(f"RuntimeContext unavailable, continuing without it: {e}")
                 ctx = None
-            
+
             try:
                 if command == "start":
                     handle_start(args)
@@ -305,6 +420,12 @@ def main() -> int:
                     handle_stop(args)
                 elif command == "build":
                     handle_build(args)
+                elif command == "pull":
+                    handle_pull(args)
+                elif command == "list":
+                    handle_list(args)
+                elif command == "remove":
+                    handle_remove(args)
                 elif command == "mcp":
                     handle_mcp(args)
                 else:
@@ -312,9 +433,9 @@ def main() -> int:
                     print(f"[X] Unknown command: '{command}'")
                     print("\nRun 'python -m Janus help' for usage information")
                     return 1  # <- PROPER EXIT CODE
-                
+
                 return 0  # <- SUCCESS EXIT CODE
-                
+
             except KeyboardInterrupt:
                 logger.info("Operation cancelled by user")
                 print("\n[!] Operation cancelled")
@@ -323,6 +444,11 @@ def main() -> int:
                 logger.critical(f"Unexpected error in main: {e}", exc_info=True)
                 print(f"\n[X] Unexpected error: {e}")
                 return 1
+            finally:
+                # Pair SHUTDOWN with STARTUP - only when the bus actually started
+                if bus_running:
+                    publish_event(EventType.SHUTDOWN, source="janus", payload={"command": command})
+                    shutdown_bus()
 
         return 0
 
