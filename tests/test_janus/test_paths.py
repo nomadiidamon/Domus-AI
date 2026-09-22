@@ -98,6 +98,67 @@ class TestHostProjectRoot:
         assert paths.is_host_initialized() is True
 
 
+class TestHostMarkerExistsAt:
+    """host_marker_exists_at() is a read-only disk check: no marker file,
+    no .domus-AI/ dir, and no touching of the in-memory host-root cache
+    or LOCAL_AI_RUNTIME_HOST. Used by initialize_host() to skip the
+    interactive prompt when a directory was already initialized."""
+ 
+    def test_false_for_empty_directory(self, tmp_path):
+        assert paths.host_marker_exists_at(tmp_path) is False
+ 
+    def test_false_when_only_marker_file_present(self, tmp_path):
+        (tmp_path / ".domus-host-marker").touch()
+        assert paths.host_marker_exists_at(tmp_path) is False
+ 
+    def test_false_when_only_domus_ai_dir_present(self, tmp_path):
+        (tmp_path / ".domus-AI").mkdir()
+        assert paths.host_marker_exists_at(tmp_path) is False
+ 
+    def test_true_when_marker_file_and_domus_ai_dir_present(self, tmp_path):
+        (tmp_path / ".domus-host-marker").touch()
+        (tmp_path / ".domus-AI").mkdir()
+        assert paths.host_marker_exists_at(tmp_path) is True
+ 
+    def test_does_not_create_anything(self, tmp_path):
+        """Purely a read - must not touch the filesystem."""
+        before = list(tmp_path.iterdir())
+        paths.host_marker_exists_at(tmp_path)
+        assert list(tmp_path.iterdir()) == before
+ 
+    def test_does_not_set_host_cache(self, tmp_path, monkeypatch):
+        """Must not populate _host_project_root or the env var as a side effect."""
+        monkeypatch.delenv("LOCAL_AI_RUNTIME_HOST", raising=False)
+        (tmp_path / ".domus-host-marker").touch()
+        (tmp_path / ".domus-AI").mkdir()
+ 
+        paths.host_marker_exists_at(tmp_path)
+ 
+        assert paths.is_host_initialized() is False
+ 
+ 
+class TestInitializeHostSkipsPromptWhenMarkerExists:
+    def test_adopts_directory_without_prompting(self, tmp_path, monkeypatch):
+        (tmp_path / ".domus-host-marker").touch()
+        (tmp_path / ".domus-AI").mkdir()
+ 
+        def _fail_if_called(*_a, **_k):
+            raise AssertionError("input() must not be called when the marker already exists")
+        monkeypatch.setattr("builtins.input", _fail_if_called)
+ 
+        result = paths.initialize_host(suggested=tmp_path)
+ 
+        assert result == tmp_path
+        assert paths.get_host_project_root() == tmp_path
+ 
+    def test_still_prompts_when_marker_absent(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("builtins.input", lambda *_a, **_k: "y")
+        result = paths.initialize_host(suggested=tmp_path)
+        assert result == tmp_path
+        assert (tmp_path / ".domus-host-marker").exists()
+ 
+
+
 class TestHostProjectPaths:
     def test_derived_paths_are_under_ai_runtime_dir(self, host_project_dir):
         ai_dir = paths.get_ai_runtime_dir()

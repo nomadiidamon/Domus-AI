@@ -223,6 +223,517 @@ class TestHandleRemove:
         assert exc_info.value.code == 1
 
 
+class TestHandleAsk:
+    def test_exits_1_when_no_model_given(self):
+        with pytest.raises(SystemExit) as exc_info:
+            main.handle_ask([])
+        assert exc_info.value.code == 1
+ 
+    def test_exits_1_when_no_prompt_given(self):
+        with pytest.raises(SystemExit) as exc_info:
+            main.handle_ask(["mercury"])
+        assert exc_info.value.code == 1
+ 
+    def test_starts_ollama_then_generates(self):
+        mock_response = MagicMock(content="Hello there!")
+        with patch("Janus.main.start_ollama") as mock_start_ollama, \
+             patch("Janus.main.generate", return_value=mock_response) as mock_generate:
+            main.handle_ask(["mercury", "hi", "there"])
+ 
+        mock_start_ollama.assert_called_once()
+        mock_generate.assert_called_once_with("mercury", "hi there")
+ 
+    def test_prints_reply_content(self, capsys):
+        mock_response = MagicMock(content="42")
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main.generate", return_value=mock_response):
+            main.handle_ask(["mercury", "What is the answer?"])
+        assert "42" in capsys.readouterr().out
+ 
+    def test_exits_1_on_runtime_error(self):
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main.generate", side_effect=RuntimeError("unreachable")):
+            with pytest.raises(SystemExit) as exc_info:
+                main.handle_ask(["mercury", "hi"])
+        assert exc_info.value.code == 1
+ 
+    def test_exits_1_on_unexpected_exception(self):
+        with patch("Janus.main.start_ollama", side_effect=ValueError("weird")):
+            with pytest.raises(SystemExit) as exc_info:
+                main.handle_ask(["mercury", "hi"])
+        assert exc_info.value.code == 1
+ 
+ 
+class TestHandleChat:
+    def test_exits_1_when_no_model_given(self):
+        with pytest.raises(SystemExit) as exc_info:
+            main.handle_chat([])
+        assert exc_info.value.code == 1
+ 
+    def test_exits_1_when_ollama_fails_to_start(self):
+        with patch("Janus.main.start_ollama", side_effect=RuntimeError("no ollama")):
+            with pytest.raises(SystemExit) as exc_info:
+                main.handle_chat(["mercury"])
+        assert exc_info.value.code == 1
+ 
+    def test_immediate_eof_ends_gracefully(self, capsys):
+        """Ctrl+D on the very first prompt should end the chat, not crash."""
+        with patch("Janus.main.start_ollama"), \
+             patch("builtins.input", side_effect=EOFError):
+            main.handle_chat(["mercury"])
+        assert "Chat ended" in capsys.readouterr().out
+ 
+    def test_exit_keyword_ends_chat_without_calling_model(self):
+        with patch("Janus.main.start_ollama"), \
+             patch("builtins.input", side_effect=["exit"]), \
+             patch("Janus.main.chat_with_model") as mock_chat:
+            main.handle_chat(["mercury"])
+        mock_chat.assert_not_called()
+ 
+    def test_sends_user_message_and_prints_reply(self, capsys):
+        mock_response = MagicMock()
+        mock_response.content = "Hi! How can I help?"
+        mock_response.message.role = "assistant"
+        mock_response.message.content = "Hi! How can I help?"
+ 
+        with patch("Janus.main.start_ollama"), \
+             patch("builtins.input", side_effect=["hello", "quit"]), \
+             patch("Janus.main.chat_with_model", return_value=mock_response) as mock_chat:
+            main.handle_chat(["mercury"])
+ 
+        mock_chat.assert_called_once()
+        called_model, called_history = mock_chat.call_args[0]
+        assert called_model == "mercury"
+        assert called_history[0].role == "user"
+        assert called_history[0].content == "hello"
+        assert "Hi! How can I help?" in capsys.readouterr().out
+ 
+    def test_keyboard_interrupt_ends_gracefully(self, capsys):
+        with patch("Janus.main.start_ollama"), \
+             patch("builtins.input", side_effect=KeyboardInterrupt):
+            main.handle_chat(["mercury"])
+        assert "Chat ended" in capsys.readouterr().out
+ 
+    def test_blank_input_is_skipped(self):
+        with patch("Janus.main.start_ollama"), \
+             patch("builtins.input", side_effect=["   ", "quit"]), \
+             patch("Janus.main.chat_with_model") as mock_chat:
+            main.handle_chat(["mercury"])
+        mock_chat.assert_not_called()
+ 
+    def test_chat_error_does_not_end_session_and_drops_turn(self):
+        """A failed turn should print an error, drop the unanswered message
+        from history, and keep the loop going rather than crashing."""
+        with patch("Janus.main.start_ollama"), \
+             patch("builtins.input", side_effect=["hello", "quit"]), \
+             patch("Janus.main.chat_with_model", side_effect=RuntimeError("boom")) as mock_chat:
+            main.handle_chat(["mercury"])
+        mock_chat.assert_called_once()
+
+    def test_warns_when_no_context_bound(self, capsys):
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._get_context", return_value=None), \
+             patch("builtins.input", side_effect=["quit"]):
+            main.handle_chat(["mercury"])
+        assert "will not be saved to memory" in capsys.readouterr().out
+ 
+    def test_no_warning_when_context_bound(self, capsys):
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._get_context", return_value=MagicMock()), \
+             patch("builtins.input", side_effect=["quit"]):
+            main.handle_chat(["mercury"])
+        assert "will not be saved to memory" not in capsys.readouterr().out
+ 
+    def test_records_exactly_one_turn_per_message_no_duplication(self):
+        """Regression test for the duplicate-recording bug: sending the
+        full growing history to chat_with_model each turn must not cause
+        earlier turns to be re-recorded into AIMemory. A 2-turn chat must
+        record exactly 4 entries (2 user + 2 assistant), not 6+."""
+        def fake_chat(model, history, record=True):
+            resp = MagicMock()
+            resp.content = "reply"
+            resp.message.role = "assistant"
+            resp.message.content = "reply"
+            return resp
+ 
+        fake_ctx = MagicMock()
+        recorded = []
+        fake_ctx.update_ai_memory.side_effect = (
+            lambda role, content, metadata=None: recorded.append((role, content))
+        )
+ 
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._get_context", return_value=fake_ctx), \
+             patch("Janus.main.chat_with_model", side_effect=fake_chat), \
+             patch("builtins.input", side_effect=["hi", "again", "quit"]):
+            main.handle_chat(["mercury"])
+ 
+        assert recorded == [
+            ("user", "hi"),
+            ("assistant", "reply"),
+            ("user", "again"),
+            ("assistant", "reply"),
+        ]
+ 
+    def test_records_reply_with_model_metadata(self):
+        mock_response = MagicMock()
+        mock_response.content = "hi"
+        mock_response.message.role = "assistant"
+        mock_response.message.content = "hi"
+        fake_ctx = MagicMock()
+ 
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._get_context", return_value=fake_ctx), \
+             patch("Janus.main.chat_with_model", return_value=mock_response), \
+             patch("builtins.input", side_effect=["hello", "quit"]):
+            main.handle_chat(["mercury"])
+ 
+        fake_ctx.update_ai_memory.assert_any_call(
+            "assistant", "hi", metadata={"model": "mercury"})
+ 
+    def test_failed_turn_is_not_recorded(self):
+        fake_ctx = MagicMock()
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._get_context", return_value=fake_ctx), \
+             patch("Janus.main.chat_with_model", side_effect=RuntimeError("boom")), \
+             patch("builtins.input", side_effect=["hello", "quit"]):
+            main.handle_chat(["mercury"])
+        fake_ctx.update_ai_memory.assert_not_called()
+ 
+    def test_help_prompt_mentioned_on_start(self, capsys):
+        with patch("Janus.main.start_ollama"), \
+             patch("builtins.input", side_effect=["quit"]):
+            main.handle_chat(["mercury"])
+        assert "/help" in capsys.readouterr().out
+ 
+ 
+class TestHandleChatSlashCommands:
+    """Slash-commands typed inside the chat REPL, dispatched via
+    _handle_chat_slash_command. Each is exercised through handle_chat's
+    input loop so the routing (starts-with-'/') is covered too."""
+ 
+    def _run_chat(self, inputs, ctx=None):
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._get_context", return_value=ctx), \
+             patch("builtins.input", side_effect=inputs):
+            main.handle_chat(["mercury"])
+ 
+    def test_help_prints_command_list_without_context(self, capsys):
+        """/help must work even with no context bound."""
+        self._run_chat(["/help", "quit"], ctx=None)
+        out = capsys.readouterr().out
+        assert "/save" in out and "/note" in out and "/remember" in out
+        assert "/condense" in out and "/history" in out
+ 
+    def test_unbound_context_warns_for_memory_commands(self, capsys):
+        self._run_chat(["/note hello", "quit"], ctx=None)
+        assert "memory commands are unavailable" in capsys.readouterr().out
+ 
+    def test_note_stores_conversation_note(self):
+        fake_ctx = MagicMock()
+        self._run_chat(["/note remember this detail", "quit"], ctx=fake_ctx)
+        fake_ctx.store_conversation_note.assert_called_once_with("remember this detail")
+ 
+    def test_note_without_text_prints_usage_and_does_not_call(self, capsys):
+        fake_ctx = MagicMock()
+        self._run_chat(["/note", "quit"], ctx=fake_ctx)
+        fake_ctx.store_conversation_note.assert_not_called()
+        assert "Usage: /note" in capsys.readouterr().out
+ 
+    def test_remember_parses_key_value(self):
+        fake_ctx = MagicMock()
+        self._run_chat(["/remember favorite_lang=python", "quit"], ctx=fake_ctx)
+        fake_ctx.remember_user_fact.assert_called_once_with("favorite_lang", "python")
+ 
+    def test_remember_trims_whitespace_around_key_and_value(self):
+        fake_ctx = MagicMock()
+        self._run_chat(["/remember   name = Ada ", "quit"], ctx=fake_ctx)
+        fake_ctx.remember_user_fact.assert_called_once_with("name", "Ada")
+ 
+    def test_remember_without_equals_prints_usage(self, capsys):
+        fake_ctx = MagicMock()
+        self._run_chat(["/remember not-valid", "quit"], ctx=fake_ctx)
+        fake_ctx.remember_user_fact.assert_not_called()
+        assert "Usage: /remember" in capsys.readouterr().out
+ 
+    def test_remember_with_empty_key_prints_usage(self, capsys):
+        fake_ctx = MagicMock()
+        self._run_chat(["/remember =value", "quit"], ctx=fake_ctx)
+        fake_ctx.remember_user_fact.assert_not_called()
+        assert "Usage: /remember" in capsys.readouterr().out
+ 
+    def test_condense_default_keep_recent(self):
+        fake_ctx = MagicMock()
+        fake_ctx.condense_conversation.return_value = {"kind": "condensed_conversation"}
+        self._run_chat(["/condense", "quit"], ctx=fake_ctx)
+        fake_ctx.condense_conversation.assert_called_once_with(keep_recent=10)
+ 
+    def test_condense_with_explicit_number(self):
+        fake_ctx = MagicMock()
+        fake_ctx.condense_conversation.return_value = {"kind": "condensed_conversation"}
+        self._run_chat(["/condense 3", "quit"], ctx=fake_ctx)
+        fake_ctx.condense_conversation.assert_called_once_with(keep_recent=3)
+ 
+    def test_condense_with_invalid_number_prints_usage(self, capsys):
+        fake_ctx = MagicMock()
+        self._run_chat(["/condense notanumber", "quit"], ctx=fake_ctx)
+        fake_ctx.condense_conversation.assert_not_called()
+        assert "Usage: /condense" in capsys.readouterr().out
+ 
+    def test_condense_prints_message_when_nothing_to_condense(self, capsys):
+        fake_ctx = MagicMock()
+        fake_ctx.condense_conversation.return_value = None
+        self._run_chat(["/condense", "quit"], ctx=fake_ctx)
+        assert "Nothing to condense" in capsys.readouterr().out
+ 
+    def test_history_default_count(self):
+        fake_ctx = MagicMock()
+        fake_ctx.get_ai_context.return_value = []
+        self._run_chat(["/history", "quit"], ctx=fake_ctx)
+        fake_ctx.get_ai_context.assert_called_once_with(num_messages=10)
+ 
+    def test_history_with_explicit_number(self):
+        fake_ctx = MagicMock()
+        fake_ctx.get_ai_context.return_value = []
+        self._run_chat(["/history 5", "quit"], ctx=fake_ctx)
+        fake_ctx.get_ai_context.assert_called_once_with(num_messages=5)
+ 
+    def test_history_prints_entries(self, capsys):
+        fake_ctx = MagicMock()
+        fake_ctx.get_ai_context.return_value = [
+            {"role": "user", "content": "hello"},
+            {"role": "assistant", "content": "hi there"},
+        ]
+        self._run_chat(["/history", "quit"], ctx=fake_ctx)
+        out = capsys.readouterr().out
+        assert "hello" in out and "hi there" in out
+ 
+    def test_history_prints_placeholder_when_empty(self, capsys):
+        fake_ctx = MagicMock()
+        fake_ctx.get_ai_context.return_value = []
+        self._run_chat(["/history", "quit"], ctx=fake_ctx)
+        assert "no recorded history" in capsys.readouterr().out
+ 
+    def test_save_calls_shutdown_and_reopens_context(self):
+        fake_ctx = MagicMock()
+        self._run_chat(["/save", "quit"], ctx=fake_ctx)
+        fake_ctx.shutdown.assert_called_once_with()
+        # is_running must be restored so the chat loop can keep going
+        assert fake_ctx.is_running is True
+ 
+    def test_save_prints_confirmation(self, capsys):
+        fake_ctx = MagicMock()
+        self._run_chat(["/save", "quit"], ctx=fake_ctx)
+        assert "Saved to disk" in capsys.readouterr().out
+ 
+    def test_unknown_slash_command_prints_error(self, capsys):
+        fake_ctx = MagicMock()
+        self._run_chat(["/bogus", "quit"], ctx=fake_ctx)
+        assert "Unknown command: /bogus" in capsys.readouterr().out
+ 
+    def test_slash_command_does_not_reach_chat_with_model(self):
+        fake_ctx = MagicMock()
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._get_context", return_value=fake_ctx), \
+             patch("Janus.main.chat_with_model") as mock_chat, \
+             patch("builtins.input", side_effect=["/note hi", "quit"]):
+            main.handle_chat(["mercury"])
+        mock_chat.assert_not_called()
+ 
+ 
+class TestHandleHistory:
+    """handle_history: read-only recall of saved AIMemory. Must never
+    prompt to initialize a host project - it either finds an already
+    initialized one (via host_marker_exists_at) or reports there's
+    nothing to show."""
+ 
+    def test_prints_message_when_no_initialized_project(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        main.handle_history([])
+        out = capsys.readouterr().out
+        assert "No initialized Domus host project" in out
+ 
+    def test_does_not_construct_context_when_no_marker(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        with patch("Mentis.context.RuntimeContext") as mock_ctx:
+            main.handle_history([])
+        mock_ctx.assert_not_called()
+ 
+    def _init_marker(self, tmp_path):
+        (tmp_path / ".domus-host-marker").touch()
+        (tmp_path / ".domus-AI").mkdir()
+ 
+    def _fake_ctx(self, conversation_history=None, conversation_notes=None, user_memory=None):
+        fake_ctx = MagicMock()
+        fake_ctx.startup.return_value = True
+        fake_ctx.ai_memory.conversation_history = conversation_history or []
+        fake_ctx.ai_memory.conversation_notes = conversation_notes or []
+        fake_ctx.ai_memory.user_memory = user_memory or {}
+        return fake_ctx
+ 
+    def test_loads_state_non_interactively_when_marker_present(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        self._init_marker(tmp_path)
+        fake_ctx = self._fake_ctx()
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx):
+            main.handle_history([])
+ 
+        fake_ctx.startup.assert_called_once()
+        assert fake_ctx.startup.call_args.kwargs.get("non_interactive") is True
+ 
+    def test_prints_placeholder_when_history_empty(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        self._init_marker(tmp_path)
+        fake_ctx = self._fake_ctx()
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx):
+            main.handle_history([])
+ 
+        assert "no recorded chat/ask history" in capsys.readouterr().out
+ 
+    def test_prints_recorded_turns(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        self._init_marker(tmp_path)
+        fake_ctx = self._fake_ctx(conversation_history=[
+            {"timestamp": "t1", "role": "user", "content": "hello"},
+            {"timestamp": "t2", "role": "assistant", "content": "hi there",
+             "metadata": {"model": "mercury"}},
+        ])
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx):
+            main.handle_history([])
+ 
+        out = capsys.readouterr().out
+        assert "hello" in out
+        assert "hi there" in out
+        assert "mercury" in out
+ 
+    def test_default_limit_is_20(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        self._init_marker(tmp_path)
+        history = [
+            {"timestamp": f"t{i}", "role": "user", "content": f"msg{i}"}
+            for i in range(30)
+        ]
+        fake_ctx = self._fake_ctx(conversation_history=history)
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx):
+            main.handle_history([])
+ 
+        out = capsys.readouterr().out
+        assert "msg0" not in out          # trimmed - outside the last 20
+        assert "msg29" in out             # most recent, must be shown
+        assert "last 20 of 30" in out
+ 
+    def test_explicit_number_limits_output(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        self._init_marker(tmp_path)
+        history = [
+            {"timestamp": f"t{i}", "role": "user", "content": f"msg{i}"}
+            for i in range(5)
+        ]
+        fake_ctx = self._fake_ctx(conversation_history=history)
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx):
+            main.handle_history(["2"])
+ 
+        out = capsys.readouterr().out
+        assert "msg0" not in out
+        assert "msg3" in out and "msg4" in out
+        assert "last 2 of 5" in out
+ 
+    def test_model_filter_only_shows_matching_turns(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        self._init_marker(tmp_path)
+        fake_ctx = self._fake_ctx(conversation_history=[
+            {"timestamp": "t1", "role": "assistant", "content": "from mercury",
+             "metadata": {"model": "mercury"}},
+            {"timestamp": "t2", "role": "assistant", "content": "from venus",
+             "metadata": {"model": "venus"}},
+        ])
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx):
+            main.handle_history(["--model", "mercury"])
+ 
+        out = capsys.readouterr().out
+        assert "from mercury" in out
+        assert "from venus" not in out
+ 
+    def test_notes_flag_shows_notes_instead_of_history(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        self._init_marker(tmp_path)
+        fake_ctx = self._fake_ctx(
+            conversation_history=[{"timestamp": "t1", "role": "user", "content": "hidden"}],
+            conversation_notes=[{"timestamp": "t2", "kind": "note", "content": "a durable note"}],
+        )
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx):
+            main.handle_history(["--notes"])
+ 
+        out = capsys.readouterr().out
+        assert "a durable note" in out
+        assert "hidden" not in out
+ 
+    def test_notes_flag_placeholder_when_empty(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        self._init_marker(tmp_path)
+        fake_ctx = self._fake_ctx()
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx):
+            main.handle_history(["--notes"])
+ 
+        assert "no notes stored" in capsys.readouterr().out
+ 
+    def test_facts_flag_shows_user_memory(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        self._init_marker(tmp_path)
+        fake_ctx = self._fake_ctx(user_memory={
+            "favorite_lang": {"value": "python", "updated_at": "t1"},
+        })
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx):
+            main.handle_history(["--facts"])
+ 
+        out = capsys.readouterr().out
+        assert "favorite_lang" in out
+        assert "python" in out
+ 
+    def test_facts_flag_placeholder_when_empty(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        self._init_marker(tmp_path)
+        fake_ctx = self._fake_ctx()
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx):
+            main.handle_history(["--facts"])
+ 
+        assert "no user facts remembered" in capsys.readouterr().out
+ 
+    def test_prints_error_when_startup_fails(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.chdir(tmp_path)
+        self._init_marker(tmp_path)
+        fake_ctx = self._fake_ctx()
+        fake_ctx.startup.return_value = False
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx):
+            main.handle_history([])
+ 
+        assert "Could not load saved state" in capsys.readouterr().out
+ 
+    def test_does_not_call_shutdown(self, tmp_path, monkeypatch):
+        """history is read-only recall - it must not persist anything
+        back to disk (no ctx.shutdown() call)."""
+        monkeypatch.chdir(tmp_path)
+        self._init_marker(tmp_path)
+        fake_ctx = self._fake_ctx()
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx):
+            main.handle_history([])
+ 
+        fake_ctx.shutdown.assert_not_called()
+ 
+
+
 class TestHandleDoctor:
     def test_prints_success_when_diagnostic_passes(self, capsys):
         with patch("Janus.main.full_diagnostic", return_value=True):

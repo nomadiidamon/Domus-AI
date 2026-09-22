@@ -11,6 +11,7 @@ subprocess is spawned.
 
 import io
 import json
+import os
 
 import pytest
 
@@ -143,7 +144,8 @@ class TestFilesystemTools:
         (host_project_dir / "src" / "main.py").write_text("")
         (host_project_dir / "readme.md").write_text("")
         from mcp.filesystem.tools import search_files
-        assert search_files.call({"pattern": ".py"}) == "src/main.py"
+        expected = os.path.normpath("src/main.py") 
+        assert os.path.normpath(search_files.call({"pattern": ".py"})) == expected
 
     def test_write_file_creates_parents(self, host_project_dir):
         from mcp.filesystem.tools import write_file

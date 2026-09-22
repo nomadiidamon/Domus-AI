@@ -7,7 +7,9 @@ from Faber.ollama_service import start_ollama, stop_ollama
 from Faber.session import stop_session, get_status, get_all_sessions
 from Faber.models import (
     start_model, stop_model, build_model, pull_model, list_models, remove_model,
+    _get_context,
 )
+from Faber.messaging import Message, chat as chat_with_model, generate
 from Janus.doctor import full_diagnostic
 from Mercurius import EventType, initialize_bus, publish_event, shutdown_bus
 
@@ -47,6 +49,21 @@ COMMANDS:
     remove <model>      Remove a model from Ollama
                         Example: python -m Janus remove mercury
     
+    ask <model> <prompt>
+                        Send a single one-off prompt to a model and print its reply
+                        Example: python -m Janus ask mercury "What is a closure?"
+ 
+    chat <model>        Start an interactive multi-turn conversation with a model
+                        Example: python -m Janus chat mercury
+                        (type 'exit' or 'quit' to end, or press Ctrl+C/Ctrl+D)
+                        (in-chat: /save /note /remember /condense /history /help)
+
+    history [n]         Recall past chat/ask turns saved to disk
+                        Example: python -m Janus history 20
+                        python -m Janus history --model mercury
+                        python -m Janus history --notes
+                        python -m Janus history --facts
+
     doctor              Run diagnostic checks on your setup
                         Example: python -m Janus doctor
     
@@ -59,6 +76,9 @@ EXAMPLES:
     python -m Janus status               # Check running models
     python -m Janus start mercury        # Start the Mercury model
     python -m Janus stop                 # Stop all models
+    python -m Janus ask mercury "..."    # One-off prompt
+    python -m Janus chat mercury         # Interactive conversation
+    python -m Janus history              # Recall saved chat history
     python -m Janus doctor               # Diagnose setup issues
 
 For more information, visit: https://github.com/nomadiidamon/Local-AI-Runtime
@@ -243,6 +263,301 @@ def handle_remove(args: list) -> None:
         print(f"[X] Error: {e}")
         sys.exit(1)
 
+def handle_ask(args: list) -> None:
+    """Handle the 'ask' command - a single one-off prompt to a model."""
+    if len(args) < 2:
+        logger.error("'ask' command requires a model name and a prompt")
+        print("Usage: python -m Janus ask <model> <prompt>")
+        print('Example: python -m Janus ask mercury "What is a closure?"')
+        sys.exit(1)
+ 
+    model = args[0]
+    prompt = " ".join(args[1:])
+    logger.info(f"Asking model '{model}': {prompt!r}")
+ 
+    try:
+        # Ensure Ollama server is running first, same as 'start'
+        start_ollama()
+ 
+        response = generate(model, prompt)
+        print(response.content)
+ 
+    except RuntimeError as e:
+        logger.error(f"Failed to get response from model: {e}")
+        print(f"[X] Error: {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Unexpected error asking model: {e}")
+        print(f"[X] Unexpected error: {e}")
+        sys.exit(1)
+
+
+def _print_chat_help() -> None:
+    print(
+        "\nChat commands:\n"
+        "  /help                 Show this list\n"
+        "  /save                 Flush conversation + memory to disk now\n"
+        "  /note <text>          Store a durable note (not trimmed, survives condense)\n"
+        "  /remember <k>=<v>     Store a permanent user fact\n"
+        "  /condense [n]         Fold all but the last n turns (default 10) into a note\n"
+        "  /history [n]          Show the last n recorded turns (default 10)\n"
+        "  exit, quit            End the chat"
+    )
+
+ 
+def handle_chat(args: list) -> None:
+    """Handle the 'chat' command - an interactive multi-turn conversation
+    with a model, read from stdin one line at a time until the user types
+    'exit'/'quit' or sends EOF (Ctrl+D) / interrupts (Ctrl+C).
+ 
+    Each turn is sent with the full in-memory history for model context,
+    but recorded into Mentis AIMemory exactly once per turn (record=False
+    on the API call, with this handler doing the recording itself) so
+    memory doesn't accumulate duplicate copies of earlier turns.
+ 
+    Slash-commands (/save, /note, /remember, /condense, /history) give
+    direct access to the memory API without leaving the chat. State is
+    also saved automatically on normal CLI exit (see Janus.main.main),
+    so /save is only needed for an explicit mid-session flush.
+    """
+    if len(args) < 1:
+        logger.error("'chat' command requires a model name")
+        print("Usage: python -m Janus chat <model>")
+        print("Example: python -m Janus chat mercury")
+        sys.exit(1)
+ 
+    model = args[0]
+    logger.info(f"Starting chat session with model: {model}")
+ 
+    try:
+        start_ollama()
+    except Exception as e:
+        logger.error(f"Failed to start Ollama server: {e}")
+        print(f"[X] Error: {e}")
+        sys.exit(1)
+ 
+    ctx = _get_context()
+    if ctx is None:
+        print("[!] No runtime context bound - this chat will not be saved to memory")
+ 
+    print(f"[CHAT] Chatting with '{model}' - type 'exit' or 'quit' to end (Ctrl+C/Ctrl+D also work)")
+    print("       Type /help to see in-chat memory commands")
+    history: list = []
+ 
+    while True:
+        try:
+            user_input = input("\nYou: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n[OK] Chat ended")
+            return
+ 
+        if not user_input:
+            continue
+ 
+        if user_input.lower() in ("exit", "quit"):
+            print("[OK] Chat ended")
+            return
+ 
+        if user_input.startswith("/"):
+            _handle_chat_slash_command(user_input, ctx, history)
+            continue
+ 
+        history.append(Message("user", user_input))
+ 
+        try:
+            # record=False: we record exactly the new turn ourselves below,
+            # rather than letting the API re-record the whole history list
+            # (which grows every turn) and duplicate every earlier message.
+            response = chat_with_model(model, history, record=False)
+        except RuntimeError as e:
+            logger.error(f"Chat request failed: {e}")
+            print(f"[X] Error: {e}")
+            # Drop the unanswered user turn so a retry doesn't duplicate it
+            history.pop()
+            continue
+        except Exception as e:
+            logger.error(f"Unexpected error during chat: {e}")
+            print(f"[X] Unexpected error: {e}")
+            history.pop()
+            continue
+ 
+        history.append(Message(response.message.role, response.message.content))
+        print(f"\n{model}: {response.content}")
+ 
+        if ctx is not None:
+            ctx.update_ai_memory("user", user_input)
+            ctx.update_ai_memory(response.message.role, response.message.content,
+                                  metadata={"model": model})
+ 
+ 
+def _handle_chat_slash_command(command: str, ctx, history: list) -> None:
+    """Handle a single /command typed inside the chat REPL."""
+    parts = command[1:].split(maxsplit=1)
+    name = parts[0].lower() if parts else ""
+    rest = parts[1].strip() if len(parts) > 1 else ""
+ 
+    if name == "help":
+        _print_chat_help()
+        return
+ 
+    if ctx is None:
+        print("[!] No runtime context bound - memory commands are unavailable")
+        return
+ 
+    if name == "save":
+        ctx.shutdown()
+        # shutdown() also flips is_running/unloads models, which we don't
+        # want mid-chat - re-open the context so the session can continue.
+        ctx.is_running = True
+        print("[OK] Saved to disk")
+ 
+    elif name == "note":
+        if not rest:
+            print("Usage: /note <text>")
+            return
+        ctx.store_conversation_note(rest)
+        print("[OK] Note stored")
+ 
+    elif name == "remember":
+        if "=" not in rest:
+            print("Usage: /remember <key>=<value>")
+            return
+        key, _, value = rest.partition("=")
+        key, value = key.strip(), value.strip()
+        if not key:
+            print("Usage: /remember <key>=<value>")
+            return
+        ctx.remember_user_fact(key, value)
+        print(f"[OK] Remembered {key} = {value}")
+ 
+    elif name == "condense":
+        keep_recent = 10
+        if rest:
+            try:
+                keep_recent = int(rest)
+            except ValueError:
+                print("Usage: /condense [number of recent turns to keep]")
+                return
+        note = ctx.condense_conversation(keep_recent=keep_recent)
+        if note is None:
+            print("[!] Nothing to condense yet")
+        else:
+            print(f"[OK] Condensed into a note (kept last {keep_recent} turns)")
+ 
+    elif name == "history":
+        num = 10
+        if rest:
+            try:
+                num = int(rest)
+            except ValueError:
+                print("Usage: /history [number of turns]")
+                return
+        recent = ctx.get_ai_context(num_messages=num)
+        if not recent:
+            print("(no recorded history yet)")
+        else:
+            for entry in recent:
+                print(f"  {entry.get('role', '?')}: {entry.get('content', '')}")
+ 
+    else:
+        print(f"[X] Unknown command: /{name} (try /help)")
+ 
+ 
+def handle_history(args: list) -> None:
+    """Handle the 'history' command - recall past chat/ask exchanges saved
+    to disk by a previous CLI session, without starting a new interactive
+    session or prompting to initialize a host project.
+ 
+    Usage:
+        python -m Janus history [n]              Last n turns (default 20)
+        python -m Janus history --model <name>    Only turns from that model
+        python -m Janus history --notes           Show stored notes instead
+        python -m Janus history --facts           Show remembered user facts
+    """
+    from pathlib import Path
+    from Janus.paths import host_marker_exists_at
+ 
+    cwd = Path.cwd()
+    if not host_marker_exists_at(cwd):
+        print("[!] No initialized Domus host project found in the current directory")
+        print("    (looked for .domus-host-marker and .domus-AI/ here)")
+        print("    Run a command like 'python -m Janus chat <model>' from your project directory first")
+        return
+ 
+    show_notes = "--notes" in args
+    show_facts = "--facts" in args
+    model_filter: Optional[str] = None
+    if "--model" in args:
+        idx = args.index("--model")
+        if idx + 1 < len(args):
+            model_filter = args[idx + 1]
+ 
+    num = 20
+    for a in args:
+        if a.isdigit():
+            num = int(a)
+            break
+ 
+    try:
+        from Mentis.context import RuntimeContext
+        ctx = RuntimeContext(project_name="LocalAIRuntime")
+        started = ctx.startup(suggested_host=cwd, non_interactive=True)
+        if not started:
+            print("[X] Could not load saved state")
+            return
+    except Exception as e:
+        logger.error(f"Failed to load saved state: {e}")
+        print(f"[X] Error loading saved state: {e}")
+        return
+ 
+    try:
+        if show_notes:
+            notes = ctx.ai_memory.conversation_notes
+            if not notes:
+                print("(no notes stored)")
+                return
+            print(f"\n[NOTES] {len(notes)} stored note(s):")
+            for note in notes[-num:]:
+                print(f"\n  [{note.get('timestamp', '?')}] ({note.get('kind', 'note')})")
+                print(f"  {note.get('content', '')}")
+            return
+ 
+        if show_facts:
+            facts = ctx.ai_memory.user_memory
+            if not facts:
+                print("(no user facts remembered)")
+                return
+            print(f"\n[FACTS] {len(facts)} remembered fact(s):")
+            for key, entry in facts.items():
+                print(f"  {key} = {entry.get('value')}  (updated {entry.get('updated_at', '?')})")
+            return
+ 
+        history = ctx.ai_memory.conversation_history
+        if model_filter:
+            history = [
+                h for h in history
+                if h.get("metadata", {}).get("model") == model_filter
+            ]
+ 
+        if not history:
+            print("(no recorded chat/ask history yet)")
+            return
+ 
+        recent = history[-num:]
+        print(f"\n[HISTORY] Showing last {len(recent)} of {len(history)} recorded turn(s):")
+        for entry in recent:
+            role = entry.get("role", "?")
+            content = entry.get("content", "")
+            model = entry.get("metadata", {}).get("model")
+            tag = f" ({model})" if model else ""
+            print(f"\n  [{entry.get('timestamp', '?')}] {role}{tag}:")
+            print(f"  {content}")
+ 
+    finally:
+        # Read-only recall - persist nothing, don't touch the saved state.
+        ctx.is_running = False
+ 
+
 def handle_doctor():
     """Handle the 'doctor' command."""
     logger.info("Running diagnostic checks...")
@@ -383,6 +698,9 @@ def main() -> int:
         elif command == "list":
             # Read-only query against the Ollama server - no RuntimeContext needed
             handle_list(args)
+        elif command == "history":
+            # Read-only recall of saved chat/ask memory - no interactive prompt
+            handle_history(args)
         elif command == "mcp" and args and args[0].lower() == "tools":
             # Read-only config query - no RuntimeContext needed
             handle_mcp_tools(args[1:])
@@ -426,6 +744,10 @@ def main() -> int:
                     handle_list(args)
                 elif command == "remove":
                     handle_remove(args)
+                elif command == "ask":
+                    handle_ask(args)
+                elif command == "chat":
+                    handle_chat(args)
                 elif command == "mcp":
                     handle_mcp(args)
                 else:
@@ -449,7 +771,11 @@ def main() -> int:
                 if bus_running:
                     publish_event(EventType.SHUTDOWN, source="janus", payload={"command": command})
                     shutdown_bus()
-
+                # Persist AI memory / config / events to disk - only when
+                # startup actually succeeded and produced a live context.
+                if ctx is not None:
+                    ctx.shutdown()
+                    
         return 0
 
     except Exception as e:

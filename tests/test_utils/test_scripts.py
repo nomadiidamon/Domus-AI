@@ -11,6 +11,9 @@ script, these tests force the wiring to stay honest.
 import re
 from pathlib import Path
 
+import subprocess
+import os
+
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -119,12 +122,20 @@ class TestShellScripts:
 
     @pytest.mark.parametrize("platform_dir", [LINUX, MACOS])
     def test_all_shell_scripts_pass_syntax_check(self, platform_dir):
-        import subprocess
+        # Locate bash using the appropriate command
+        if os.name == 'nt':  # Windows
+            result = subprocess.run(["where", "bash"], capture_output=True, text=True)
+        else:  # Linux or macOS
+            result = subprocess.run(["which", "bash"], capture_output=True, text=True)
+        
+        bash_path = result.stdout.strip().split('\n')[0] if result.returncode == 0 else None
+        assert bash_path, "bash executable not found"
+
         for script in platform_dir.glob("*.sh"):
             result = subprocess.run(
-                ["bash", "-n", str(script)], capture_output=True, text=True
+                [bash_path, "-n", str(script)], capture_output=True, text=True
             )
-            assert result.returncode == 0, f"{script.name}: {result.stderr}"
+            assert result.returncode == 0, f"Syntax error in {script}: {result.stderr}"
 
     def test_linux_and_macos_scripts_are_identical_where_shared(self):
         """The AI lifecycle scripts are platform-identical bash; drift

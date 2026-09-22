@@ -106,12 +106,30 @@ def get_host_project_root() -> Path:
     )
 
 def is_host_initialized() -> bool:
-    """Return True if the host project root has been confirmed and set."""
+    """Return True if the host project root has been confirmed and set
+    (in-memory cache or LOCAL_AI_RUNTIME_HOST env var only - does not
+    touch disk). See host_marker_exists_at() for a disk-based check."""
     try:
         get_host_project_root()
         return True
     except RuntimeError:
         return False
+
+def host_marker_exists_at(path: str | Path) -> bool:
+    """
+    Non-manipulative check for whether `path` is already an initialized
+    host project: both the .domus-host-marker file and the .domus-AI/
+    working directory must already exist there.
+ 
+    Read-only - performs no filesystem writes and does not touch the
+    in-memory _host_project_root cache or the LOCAL_AI_RUNTIME_HOST env
+    var. Safe to call speculatively before deciding whether to prompt.
+    """
+    candidate = Path(path)
+    return (
+        (candidate / _HOST_MARKER_NAME).exists()
+        and (candidate / ".domus-AI").is_dir()
+    )
 
 # ---------------------------------------------------------------------------
 # Host project paths  (writable, created inside the host project)
@@ -228,39 +246,48 @@ def _prompt_for_path(suggested: Path) -> Path:
 def initialize_host(suggested: Path | None = None, non_interactive: bool = False) -> Path:
     """
     Confirm and initialize the host project root.
-
+ 
     If the host is already set (env var or prior call), this is a no-op.
-    Otherwise prompts the user to confirm or change the location, then
-    creates the marker file and sets the host root.
-
+    If the suggested/cwd directory already has a .domus-host-marker file
+    and .domus-AI/ folder on disk (e.g. Janus was already initialized
+    here in a previous run), that location is adopted silently and the
+    prompt is skipped too. Otherwise prompts the user to confirm or
+    change the location, then creates the marker file and sets the host
+    root.
+ 
     Args:
         suggested:       Path to suggest. Defaults to cwd.
         non_interactive: Accept the suggested path without prompting.
-
+ 
     Returns:
         Path: The confirmed host project root.
-
+ 
     Raises:
         RuntimeError: If the user cancels, or the path is invalid.
     """
     if is_host_initialized():
         return get_host_project_root()
-
+ 
     suggested = Path(suggested).resolve() if suggested else Path.cwd()
-
+ 
+    # Already initialized here on disk - skip the prompt entirely.
+    if host_marker_exists_at(suggested):
+        set_host_project_root(suggested)
+        return suggested
+ 
     if non_interactive:
         if not suggested.exists() or not suggested.is_dir():
             raise RuntimeError(f"Non-interactive init failed: invalid path '{suggested}'")
         set_host_project_root(suggested)
         return suggested
-
+ 
     confirmed = _prompt_for_path(suggested)
     set_host_project_root(confirmed)
-
+ 
     print(f"\n[OK] Host project root set to: {confirmed}")
     print(f"[OK] Host marker created at:   {confirmed / _HOST_MARKER_NAME}")
     print()
-
+ 
     return confirmed
 
 # ---------------------------------------------------------------------------

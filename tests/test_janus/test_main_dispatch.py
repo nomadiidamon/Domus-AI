@@ -76,6 +76,20 @@ class TestMainStatusAndDoctor:
         mock_ctx.assert_not_called()
         assert result == 0
 
+    def test_history_dispatches_without_context_init(self, monkeypatch):
+        """history is a read-only recall of saved memory - like
+        status/doctor it must never construct a mutating RuntimeContext
+        via the normal dispatch path (handle_history manages its own,
+        read-only, non-interactive context load internally)."""
+        monkeypatch.setattr("sys.argv", ["janus", "history", "10"])
+        with patch("Janus.main.handle_history") as mock_history, \
+             patch("Mentis.context.RuntimeContext") as mock_ctx:
+            result = main.main()
+ 
+        mock_history.assert_called_once_with(["10"])
+        mock_ctx.assert_not_called()
+        assert result == 0
+
     def test_mcp_launch_still_uses_context_path(self, monkeypatch):
         """Other mcp actions keep the full runtime initialization."""
         monkeypatch.setattr("sys.argv", ["janus", "mcp", "launch", "mercury"])
@@ -172,6 +186,18 @@ class TestMainCommandDispatch:
         result, handler = self._run_with_mocked_context(
             monkeypatch, ["janus", "mcp", "launch", "mercury"], "handle_mcp")
         handler.assert_called_once_with(["launch", "mercury"])
+        assert result == 0
+
+    def test_ask_dispatches_to_handle_ask(self, monkeypatch):
+        result, handler = self._run_with_mocked_context(
+            monkeypatch, ["janus", "ask", "mercury", "hi", "there"], "handle_ask")
+        handler.assert_called_once_with(["mercury", "hi", "there"])
+        assert result == 0
+ 
+    def test_chat_dispatches_to_handle_chat(self, monkeypatch):
+        result, handler = self._run_with_mocked_context(
+            monkeypatch, ["janus", "chat", "mercury"], "handle_chat")
+        handler.assert_called_once_with(["mercury"])
         assert result == 0
 
     def test_unknown_command_returns_1(self, monkeypatch):
@@ -311,13 +337,113 @@ class TestMainEventBusLifecycle:
     def test_status_and_doctor_do_not_touch_the_bus(self, monkeypatch):
         for command in ("status", "doctor"):
             monkeypatch.setattr("sys.argv", ["janus", command])
-
+ 
             with patch(f"Janus.main.handle_{command}"), \
                  patch("Janus.main.initialize_bus") as mock_init, \
                  patch("Janus.main.publish_event") as mock_publish, \
                  patch("Janus.main.shutdown_bus") as mock_shutdown:
                 assert main.main() == 0
-
+ 
             mock_init.assert_not_called()
             mock_publish.assert_not_called()
             mock_shutdown.assert_not_called()
+ 
+    def test_history_does_not_touch_the_bus(self, monkeypatch):
+        """history is read-only recall - like status/doctor, must never
+        touch the Mercurius bus or construct a mutating RuntimeContext."""
+        monkeypatch.setattr("sys.argv", ["janus", "history"])
+        with patch("Janus.main.handle_history") as mock_history, \
+             patch("Janus.main.initialize_bus") as mock_init, \
+             patch("Janus.main.publish_event") as mock_publish, \
+             patch("Janus.main.shutdown_bus") as mock_shutdown, \
+             patch("Mentis.context.RuntimeContext") as mock_ctx:
+            result = main.main()
+ 
+        mock_history.assert_called_once_with([])
+        mock_ctx.assert_not_called()
+        mock_init.assert_not_called()
+        mock_publish.assert_not_called()
+        mock_shutdown.assert_not_called()
+        assert result == 0
+ 
+ 
+class TestMainContextShutdown:
+    """ctx.shutdown() persists AI memory/config/events to disk. It must
+    fire on every successful or failed command that got a live context,
+    and must never fire (or be attempted) when context init failed."""
+ 
+    def test_ctx_shutdown_called_on_success(self, monkeypatch):
+        monkeypatch.setattr("sys.argv", ["janus", "start", "mercury"])
+        fake_ctx = MagicMock()
+        fake_ctx.startup.return_value = True
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx), \
+             patch("Faber.models.set_context"), \
+             patch("Janus.main.initialize_bus"), \
+             patch("Janus.main.publish_event"), \
+             patch("Janus.main.shutdown_bus"), \
+             patch("Janus.main.handle_start"):
+            result = main.main()
+ 
+        assert result == 0
+        fake_ctx.shutdown.assert_called_once_with()
+ 
+    def test_ctx_shutdown_called_even_when_handler_raises(self, monkeypatch):
+        monkeypatch.setattr("sys.argv", ["janus", "chat", "mercury"])
+        fake_ctx = MagicMock()
+        fake_ctx.startup.return_value = True
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx), \
+             patch("Faber.models.set_context"), \
+             patch("Janus.main.initialize_bus"), \
+             patch("Janus.main.publish_event"), \
+             patch("Janus.main.shutdown_bus"), \
+             patch("Janus.main.handle_chat", side_effect=ValueError("boom")):
+            result = main.main()
+ 
+        assert result == 1
+        fake_ctx.shutdown.assert_called_once_with()
+ 
+    def test_ctx_shutdown_called_even_when_handler_calls_sys_exit(self, monkeypatch):
+        """handle_ask/handle_chat use sys.exit(1) on error, not a raised
+        exception - SystemExit must still hit the finally block."""
+        monkeypatch.setattr("sys.argv", ["janus", "ask", "mercury", "hi"])
+        fake_ctx = MagicMock()
+        fake_ctx.startup.return_value = True
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx), \
+             patch("Faber.models.set_context"), \
+             patch("Janus.main.initialize_bus"), \
+             patch("Janus.main.publish_event"), \
+             patch("Janus.main.shutdown_bus"), \
+             patch("Janus.main.handle_ask", side_effect=SystemExit(1)):
+            with pytest.raises(SystemExit):
+                main.main()
+ 
+        fake_ctx.shutdown.assert_called_once_with()
+ 
+    def test_ctx_shutdown_not_called_when_startup_fails(self, monkeypatch):
+        monkeypatch.setattr("sys.argv", ["janus", "start", "mercury"])
+        fake_ctx = MagicMock()
+        fake_ctx.startup.return_value = False
+ 
+        with patch("Mentis.context.RuntimeContext", return_value=fake_ctx), \
+             patch("Janus.main.initialize_bus"), \
+             patch("Janus.main.publish_event"), \
+             patch("Janus.main.shutdown_bus"):
+            result = main.main()
+ 
+        assert result == 1
+        fake_ctx.shutdown.assert_not_called()
+ 
+    def test_ctx_shutdown_not_called_when_context_init_raises(self, monkeypatch):
+        monkeypatch.setattr("sys.argv", ["janus", "start", "mercury"])
+ 
+        with patch("Mentis.context.RuntimeContext", side_effect=RuntimeError("boom")), \
+             patch("Janus.main.initialize_bus"), \
+             patch("Janus.main.publish_event"), \
+             patch("Janus.main.shutdown_bus"), \
+             patch("Janus.main.handle_start"):
+            result = main.main()
+ 
+        assert result == 0  # continues without context per existing contract
