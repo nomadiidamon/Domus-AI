@@ -379,6 +379,24 @@ def handle_chat(args: list) -> None:
     results are printed as they happen and recorded into AIMemory
     alongside the conversation, so `janus history` shows the full trace.
     """
+
+    class PrintColors:
+        HEADER = '\033[95m'
+
+        FAIL = '\033[91m'
+        WARNING = '\033[93m'
+        
+        OKGREEN = '\033[92m'
+        OKBLUE = '\033[94m'
+        OKCYAN = '\033[96m'
+        OKYELLOW = '\033[93m'
+
+        ENDC = '\033[0m'
+
+        BOLD = '\033[1m'
+        ITALICS = '\033[3m'
+        UNDERLINE = '\033[4m'
+
     if len(args) < 1:
         logger.error("'chat' command requires a model name")
         print("Usage: python -m Janus chat <model>")
@@ -388,6 +406,7 @@ def handle_chat(args: list) -> None:
     model = args[0]
     tools_disabled = "--no-tools" in args
     logger.info(f"Starting chat session with model: {model}")
+    print("\n\n")
  
     try:
         start_ollama()
@@ -409,7 +428,8 @@ def handle_chat(args: list) -> None:
     permitted_tool_names = set()
     if tools_enabled:
         permitted_tool_names = {t["function"]["name"] for t in ollama_tools}
-        print(f"[TOOLS] filesystem tools available: {', '.join(permitted_tool_names)}")
+        print(f"{PrintColors.OKCYAN}[TOOLS] filesystem tools available: {PrintColors.OKGREEN}{', '.join(permitted_tool_names)}{PrintColors.ENDC}")
+        print("\n")
 
     def tool_executor(tool_name: str, arguments: dict) -> str:
         # Enforce the profile allowlist at call time, not just at
@@ -417,26 +437,29 @@ def handle_chat(args: list) -> None:
         # (hallucination, or prompt injection via file contents it read),
         # so only tools that were actually offered may run.
         if tool_name not in permitted_tool_names:
-            print(f"\n  [TOOL] {tool_name}({arguments})")
-            print("  [TOOL] -> DENIED (not permitted for this model's MCP profile)")
+            print(f"\n{PrintColors.FAIL}  [TOOL] {tool_name}({arguments})")
+            print(f"  [TOOL] -> DENIED (not permitted for this model's MCP profile){PrintColors.ENDC}")
             raise PermissionError(
                 f"Tool '{tool_name}' is not permitted for model '{model}'. "
                 f"Available tools: {', '.join(sorted(permitted_tool_names))}"
             )
-        print(f"\n  [TOOL] {tool_name}({arguments})")
+        print(f"\n\n{PrintColors.OKYELLOW}  [TOOL] {tool_name}({arguments}){PrintColors.ENDC}")
         result = mcp_client.call_tool(tool_name, arguments)
-        preview = result if len(result) <= 200 else result[:200] + "..."
-        print(f"  [TOOL] -> {preview}")
+        preview = result if len(result) <= 200 else result[:200] + "...\n\n**END TOOL PREVIEW**\n\n"
+        preview = "**START TOOL PREVIEW**\n\n" + preview
+        print(f"{PrintColors.OKCYAN}  [TOOL] ->\n{preview}{PrintColors.ENDC}")
         return result
  
-    print(f"[CHAT] Chatting with '{model}' - type 'exit' or 'quit' to end (Ctrl+C/Ctrl+D also work)")
-    print("       Type /help to see in-chat memory commands")
+    print(f"{PrintColors.HEADER}[CHAT] Chatting with '{model}'{PrintColors.ENDC}")
+    print(f"{PrintColors.OKYELLOW}{PrintColors.ITALICS}\tType 'exit' or 'quit' to end (Ctrl+C/Ctrl+D also work){PrintColors.ENDC}")
+    print(f"{PrintColors.OKYELLOW}{PrintColors.ITALICS}\tType /help to see in-chat memory commands\n{PrintColors.ENDC}")
     history: list = []
 
     try:
+
         while True:
             try:
-                user_input = input("\nYou: ").strip()
+                user_input = input(f"\n{PrintColors.OKGREEN}You: {PrintColors.ENDC}").strip()
             except (EOFError, KeyboardInterrupt):
                 print("\n[OK] Chat ended")
                 return
@@ -491,7 +514,7 @@ def handle_chat(args: list) -> None:
                                           metadata=metadata)
 
             history.append(Message(response.message.role, response.message.content))
-            print(f"\n{model}: {response.content}")
+            print(f"\n{PrintColors.OKBLUE}{model}: {PrintColors.ENDC}{response.content}\n")
 
             if ctx is not None:
                 ctx.update_ai_memory("user", user_input)
