@@ -2,6 +2,7 @@
 import sys
 import logging
 from typing import Optional
+from unittest import result
 
 from Faber.ollama_service import start_ollama, stop_ollama
 from Faber.session import stop_session, get_status, get_all_sessions
@@ -53,10 +54,14 @@ COMMANDS:
                         Send a single one-off prompt to a model and print its reply
                         Example: python -m Janus ask mercury "What is a closure?"
  
-    chat <model>        Start an interactive multi-turn conversation with a model
+    chat <model> [--no-tools]
+                        Start an interactive multi-turn conversation with a model
                         Example: python -m Janus chat mercury
                         (type 'exit' or 'quit' to end, or press Ctrl+C/Ctrl+D)
-                        (in-chat: /save /note /remember /condense /history /help)
+                        (in-chat: /save /note /remember /condense /history /tools /help)
+                        If the model's MCP profile allows it, the model can use
+                        filesystem tools (read_file, list_directory, ...) mid-chat.
+                        Pass --no-tools to disable that.
 
     history [n]         Recall past chat/ask turns saved to disk
                         Example: python -m Janus history 20
@@ -292,7 +297,7 @@ def handle_ask(args: list) -> None:
         sys.exit(1)
 
 
-def _print_chat_help() -> None:
+def _print_chat_help(tools_enabled: bool) -> None:
     print(
         "\nChat commands:\n"
         "  /help                 Show this list\n"
@@ -301,10 +306,57 @@ def _print_chat_help() -> None:
         "  /remember <k>=<v>     Store a permanent user fact\n"
         "  /condense [n]         Fold all but the last n turns (default 10) into a note\n"
         "  /history [n]          Show the last n recorded turns (default 10)\n"
-        "  exit, quit            End the chat"
+        + ("  /tools                List MCP tools available to this model\n" if tools_enabled else "")
+        + "  exit, quit            End the chat"
     )
 
- 
+
+def _setup_filesystem_tools(model: str):
+    """
+    If `model`'s MCP profile grants access to the "filesystem" server,
+    launch it and return (MCPClient, ollama_tools) ready to pass into
+    chat_with_model(tools=..., tool_executor=...). Returns (None, None)
+    when the model has no profile, the profile doesn't include
+    filesystem, or the server fails to launch - chat proceeds without
+    tools in every one of those cases rather than failing the session.
+    """
+    try:
+        from Custos.mcp import MCPManager, ProfileNotFoundError, MCPConfigError, \
+            filter_tools_for_model, mcp_tools_to_ollama_tools
+        from Custos.mcp_client import MCPClient, MCPClientError
+
+        manager = MCPManager()
+        try:
+            allowed = manager.get_tools(model)
+        except ProfileNotFoundError:
+            logger.info(f"No MCP profile for model '{model}' - chatting without tools")
+            return None, None
+
+        if "filesystem" not in allowed:
+            return None, None
+
+        server_config = manager.get_server_config("filesystem")
+        client = MCPClient("filesystem", server_config)
+        client.start()
+
+        live_tools = client.list_tools()
+        permitted = filter_tools_for_model(live_tools, "filesystem", model, manager)
+        if not permitted:
+            client.close()
+            return None, None
+
+        return client, mcp_tools_to_ollama_tools(permitted)
+
+    except (MCPConfigError, MCPClientError) as e:
+        logger.warning(f"MCP filesystem tools unavailable: {e}")
+        print(f"[!] MCP filesystem tools unavailable ({e}) - chatting without tools")
+        return None, None
+    except Exception as e:
+        logger.warning(f"Unexpected error setting up MCP tools: {e}")
+        print(f"[!] Could not set up MCP tools ({e}) - chatting without tools")
+        return None, None
+
+
 def handle_chat(args: list) -> None:
     """Handle the 'chat' command - an interactive multi-turn conversation
     with a model, read from stdin one line at a time until the user types
@@ -319,6 +371,13 @@ def handle_chat(args: list) -> None:
     direct access to the memory API without leaving the chat. State is
     also saved automatically on normal CLI exit (see Janus.main.main),
     so /save is only needed for an explicit mid-session flush.
+
+    MCP tools: if the model's MCP profile (mcp/profiles/<Model>.json)
+    grants access to the "filesystem" server, this launches it and lets
+    the model call its tools (read_file, list_directory, etc.) mid-chat.
+    Pass --no-tools to disable this for the session. Tool calls and their
+    results are printed as they happen and recorded into AIMemory
+    alongside the conversation, so `janus history` shows the full trace.
     """
     if len(args) < 1:
         logger.error("'chat' command requires a model name")
@@ -327,6 +386,7 @@ def handle_chat(args: list) -> None:
         sys.exit(1)
  
     model = args[0]
+    tools_disabled = "--no-tools" in args
     logger.info(f"Starting chat session with model: {model}")
  
     try:
@@ -339,65 +399,131 @@ def handle_chat(args: list) -> None:
     ctx = _get_context()
     if ctx is None:
         print("[!] No runtime context bound - this chat will not be saved to memory")
+
+    mcp_client = None
+    ollama_tools = None
+    if not tools_disabled:
+        mcp_client, ollama_tools = _setup_filesystem_tools(model)
+
+    tools_enabled = mcp_client is not None
+    permitted_tool_names = set()
+    if tools_enabled:
+        permitted_tool_names = {t["function"]["name"] for t in ollama_tools}
+        print(f"[TOOLS] filesystem tools available: {', '.join(permitted_tool_names)}")
+
+    def tool_executor(tool_name: str, arguments: dict) -> str:
+        # Enforce the profile allowlist at call time, not just at
+        # advertisement time. The model can request any tool name it likes
+        # (hallucination, or prompt injection via file contents it read),
+        # so only tools that were actually offered may run.
+        if tool_name not in permitted_tool_names:
+            print(f"\n  [TOOL] {tool_name}({arguments})")
+            print("  [TOOL] -> DENIED (not permitted for this model's MCP profile)")
+            raise PermissionError(
+                f"Tool '{tool_name}' is not permitted for model '{model}'. "
+                f"Available tools: {', '.join(sorted(permitted_tool_names))}"
+            )
+        print(f"\n  [TOOL] {tool_name}({arguments})")
+        result = mcp_client.call_tool(tool_name, arguments)
+        preview = result if len(result) <= 200 else result[:200] + "..."
+        print(f"  [TOOL] -> {preview}")
+        return result
  
     print(f"[CHAT] Chatting with '{model}' - type 'exit' or 'quit' to end (Ctrl+C/Ctrl+D also work)")
     print("       Type /help to see in-chat memory commands")
     history: list = []
+
+    try:
+        while True:
+            try:
+                user_input = input("\nYou: ").strip()
+            except (EOFError, KeyboardInterrupt):
+                print("\n[OK] Chat ended")
+                return
+
+            if not user_input:
+                continue
+
+            if user_input.lower() in ("exit", "quit"):
+                print("[OK] Chat ended")
+                return
+
+            if user_input.startswith("/"):
+                _handle_chat_slash_command(user_input, ctx, history, tools_enabled, ollama_tools)
+                continue
+
+            history.append(Message("user", user_input))
+
+            try:
+                # record=False: we record exactly the new turn ourselves below,
+                # rather than letting the API re-record the whole history list
+                # (which grows every turn) and duplicate every earlier message.
+                response = chat_with_model(
+                    model, history, record=False,
+                    tools=ollama_tools if tools_enabled else None,
+                    tool_executor=tool_executor if tools_enabled else None,
+                )
+            except RuntimeError as e:
+                logger.error(f"Chat request failed: {e}")
+                print(f"[X] Error: {e}")
+                # Drop the unanswered user turn so a retry doesn't duplicate it
+                history.pop()
+                continue
+            except Exception as e:
+                logger.error(f"Unexpected error during chat: {e}")
+                print(f"[X] Unexpected error: {e}")
+                history.pop()
+                continue
+
+            # Tool-call turns the loop already resolved (assistant request +
+            # tool result pairs) - fold into history so the next turn's
+            # context includes them, and record them the same way the API's
+            # own record=True path would have. Recorded via the ctx already
+            # in scope here (not Faber.messaging's own _get_context lookup)
+            # so this works with whatever context handle_chat is bound to.
+            history.extend(response.tool_trace)
+            if ctx is not None:
+                for trace_message in response.tool_trace:
+                    metadata = {"model": model}
+                    if trace_message.tool_name:
+                        metadata["tool_name"] = trace_message.tool_name
+                    ctx.update_ai_memory(trace_message.role, trace_message.content,
+                                          metadata=metadata)
+
+            history.append(Message(response.message.role, response.message.content))
+            print(f"\n{model}: {response.content}")
+
+            if ctx is not None:
+                ctx.update_ai_memory("user", user_input)
+                ctx.update_ai_memory(response.message.role, response.message.content,
+                                      metadata={"model": model})
+    finally:
+        if mcp_client is not None:
+            mcp_client.close()
  
-    while True:
-        try:
-            user_input = input("\nYou: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\n[OK] Chat ended")
-            return
  
-        if not user_input:
-            continue
- 
-        if user_input.lower() in ("exit", "quit"):
-            print("[OK] Chat ended")
-            return
- 
-        if user_input.startswith("/"):
-            _handle_chat_slash_command(user_input, ctx, history)
-            continue
- 
-        history.append(Message("user", user_input))
- 
-        try:
-            # record=False: we record exactly the new turn ourselves below,
-            # rather than letting the API re-record the whole history list
-            # (which grows every turn) and duplicate every earlier message.
-            response = chat_with_model(model, history, record=False)
-        except RuntimeError as e:
-            logger.error(f"Chat request failed: {e}")
-            print(f"[X] Error: {e}")
-            # Drop the unanswered user turn so a retry doesn't duplicate it
-            history.pop()
-            continue
-        except Exception as e:
-            logger.error(f"Unexpected error during chat: {e}")
-            print(f"[X] Unexpected error: {e}")
-            history.pop()
-            continue
- 
-        history.append(Message(response.message.role, response.message.content))
-        print(f"\n{model}: {response.content}")
- 
-        if ctx is not None:
-            ctx.update_ai_memory("user", user_input)
-            ctx.update_ai_memory(response.message.role, response.message.content,
-                                  metadata={"model": model})
- 
- 
-def _handle_chat_slash_command(command: str, ctx, history: list) -> None:
+def _handle_chat_slash_command(command: str, ctx, history: list,
+                                tools_enabled: bool = False,
+                                ollama_tools: Optional[list] = None) -> None:
     """Handle a single /command typed inside the chat REPL."""
     parts = command[1:].split(maxsplit=1)
     name = parts[0].lower() if parts else ""
     rest = parts[1].strip() if len(parts) > 1 else ""
  
     if name == "help":
-        _print_chat_help()
+        _print_chat_help(tools_enabled)
+        return
+
+    if name == "tools":
+        # Doesn't need a RuntimeContext - purely reports what's loaded.
+        if not tools_enabled or not ollama_tools:
+            print("[!] No MCP tools are enabled for this chat "
+                  "(model has no filesystem access in its profile, or --no-tools was used)")
+            return
+        print("\nAvailable MCP tools:")
+        for tool in ollama_tools:
+            fn = tool["function"]
+            print(f"  {fn['name']:<20} {fn.get('description', '')}")
         return
  
     if ctx is None:

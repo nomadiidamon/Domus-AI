@@ -16,5 +16,11 @@
     "modelfile": "D:\\AI\\Modelfiles\\Minerva\\Modelfile",
     "profile": "lightweight",
     "description": "Lightweight assistant for scripts, explanations and quick fixes."
+  },
+  "Analyst": {
+    "base": "gemma4:12b",
+    "modelfile": "D:\\AI\\Modelfiles\\Analyst\\Modelfile",
+    "profile": "Heavy Analyst",
+    "description": "Heavy-weight analyst assistant for review and assestments."
   }
 }

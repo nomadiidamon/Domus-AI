@@ -202,3 +202,50 @@ class MCPManager:
             if "*" in tools or tool in tools:
                 return True
         return False
+
+    def get_server_config(self, server: str) -> Dict[str, Any]:
+        """Return the servers.json entry for `server` (command/args/env/...)."""
+        try:
+            return self.servers[server]
+        except KeyError:
+            raise MCPConfigError(f"Unknown MCP server '{server}'") from None
+
+
+def filter_tools_for_model(
+    live_tools: List[Dict[str, Any]],
+    server: str,
+    model: str,
+    manager: "MCPManager",
+) -> List[Dict[str, Any]]:
+    """
+    Narrow a server's live tools/list result down to the ones `model`'s
+    profile allows, per manager.get_tools(). live_tools is whatever
+    MCPClient.list_tools() returned for that server (each a dict with at
+    least "name" - the live, authoritative schema - not the static config).
+    """
+    allowed = manager.get_tools(model).get(server, [])
+    if "*" in allowed:
+        return list(live_tools)
+    return [t for t in live_tools if t.get("name") in allowed]
+
+
+def mcp_tools_to_ollama_tools(mcp_tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Translate MCP tool definitions (name/description/inputSchema) into the
+    "tools" array shape Ollama's /api/chat expects
+    ({"type": "function", "function": {name, description, parameters}}).
+
+    Both sides use JSON Schema for parameters, so this is a pure reshape -
+    no schema conversion needed.
+    """
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": tool["name"],
+                "description": tool.get("description", ""),
+                "parameters": tool.get("inputSchema", {"type": "object", "properties": {}}),
+            },
+        }
+        for tool in mcp_tools
+    ]

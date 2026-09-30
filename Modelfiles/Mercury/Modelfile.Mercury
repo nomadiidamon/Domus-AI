@@ -56,5 +56,5 @@ You are fast, but never careless.
 
 
 PARAMETER temperature 0.15
-PARAMETER num_ctx 32768
+PARAMETER num_ctx 64000
 PARAMETER repeat_penalty 1.1

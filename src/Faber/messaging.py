@@ -15,23 +15,46 @@ DEFAULT_BASE_URL = "http://localhost:11434"
 
 @dataclass
 class Message:
-    """A single chat message. Role is 'system', 'user', or 'assistant'."""
+    """A single chat message. Role is 'system', 'user', 'assistant', or 'tool'.
+
+    tool_name:  set on an outgoing role="tool" message - identifies which
+                tool this result came from (Ollama's convention).
+    tool_calls: set on an incoming role="assistant" message when the model
+                requested tool calls instead of (or alongside) replying
+                directly. Each entry is Ollama's raw
+                {"function": {"name": str, "arguments": dict}} shape.
+    """
     role: str
     content: str
+    tool_name: Optional[str] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
 
     def to_dict(self) -> dict:
-        return {"role": self.role, "content": self.content}
+        d = {"role": self.role, "content": self.content}
+        if self.tool_name is not None:
+            d["tool_name"] = self.tool_name
+        if self.tool_calls is not None:
+            d["tool_calls"] = self.tool_calls
+        return d
 
 
 @dataclass
 class ChatResponse:
-    """Structured reply from the model."""
+    """Structured reply from the model.
+
+    tool_trace holds every intermediate message generated while resolving
+    tool calls (each assistant turn that requested tools, and each
+    resulting role="tool" message), in order. Empty when tools weren't
+    used or the model didn't call any. `message`/`content` always refer
+    to the final, non-tool-call reply.
+    """
     model: str
     message: Message
     done: bool = True
     total_duration_ns: Optional[int] = None
     eval_count: Optional[int] = None
     raw: Dict[str, Any] = field(default_factory=dict)
+    tool_trace: List[Message] = field(default_factory=list)
 
     @property
     def content(self) -> str:
@@ -59,8 +82,10 @@ def _parse_chat_response(payload: dict, model: str) -> ChatResponse:
     raw_message = payload.get("message") or {}
     return ChatResponse(
         model=payload.get("model", model),
-        message=Message(role=raw_message.get("role", "assistant"),
-                        content=raw_message.get("content", "")),
+        message=Message(
+            role=raw_message.get("role", "assistant"),
+            content=raw_message.get("content", ""),
+            tool_calls=raw_message.get("tool_calls") or None,),
         done=payload.get("done", True),
         total_duration_ns=payload.get("total_duration"),
         eval_count=payload.get("eval_count"),
@@ -78,6 +103,24 @@ def _record_conversation(model: str, messages: List[Message], reply: Message) ->
     context.update_ai_memory(reply.role, reply.content,
                              metadata={"model": model})
 
+
+def _record_tool_trace(model: str, tool_trace: List[Message]) -> None:
+    """Mirror intermediate tool-call/tool-result turns into AIMemory.
+
+    Separate from _record_conversation because these messages carry a
+    tool_name (for role="tool" entries) that belongs in metadata, not
+    alongside the user/assistant turns _record_conversation handles.
+    """
+    if not tool_trace:
+        return
+    context = _get_context()
+    if context is None:
+        return
+    for message in tool_trace:
+        metadata = {"model": model}
+        if message.tool_name:
+            metadata["tool_name"] = message.tool_name
+        context.update_ai_memory(message.role, message.content, metadata=metadata)
 
 def _publish(event_type, model: str, message: Message) -> None:
     """Publish a messaging event to the Mercurius bus (no-op without one)."""
@@ -97,27 +140,20 @@ def _publish(event_type, model: str, message: Message) -> None:
                      exc_info=True)
 
 
-def chat(
-    model: str,
-    messages: List[Message],
-    *,
-    base_url: str = DEFAULT_BASE_URL,
-    timeout: int = 300,
-    record: bool = True,
-) -> ChatResponse:
-    """
-    Send a conversation to a model and return its reply.
+MAX_TOOL_ITERATIONS = 8
 
-    When a RuntimeContext is bound (Faber.models.set_context) and record is
-    True, the outgoing messages and the reply are appended to AIMemory.
 
-    Raises RuntimeError if the server is unreachable or returns an error.
-    """
-    body = {
+def _chat_once(model: str, messages: List[Message], tools: Optional[List[Dict[str, Any]]],
+                base_url: str, timeout: int) -> ChatResponse:
+    """Single, non-looping call to /api/chat. Used by chat() both for the
+    first turn and for each follow-up turn after resolving tool calls."""
+    body: Dict[str, Any] = {
         "model": model,
         "messages": [m.to_dict() for m in messages],
         "stream": False,
     }
+    if tools:
+        body["tools"] = tools
 
     from Mercurius import EventType
     for message in messages:
@@ -135,13 +171,92 @@ def chat(
         raise RuntimeError(f"Ollama chat failed for model '{model}': {payload['error']}")
 
     response = _parse_chat_response(payload, model)
-
     _publish(EventType.MESSAGE_RECEIVED, model, response.message)
+    return response
+
+
+def chat(
+    model: str,
+    messages: List[Message],
+    *,
+    base_url: str = DEFAULT_BASE_URL,
+    timeout: int = 300,
+    record: bool = True,
+    tools: Optional[List[Dict[str, Any]]] = None,
+    tool_executor: Optional[Any] = None,
+    max_tool_iterations: int = MAX_TOOL_ITERATIONS,
+) -> ChatResponse:
+    """
+    Send a conversation to a model and return its reply.
+
+    When a RuntimeContext is bound (Faber.models.set_context) and record is
+    True, the outgoing messages and the final reply (plus any tool_trace)
+    are appended to AIMemory.
+
+    Tool calling (optional): pass `tools` (Ollama-format tool schemas, see
+    Custos.mcp.mcp_tools_to_ollama_tools) and `tool_executor` - a callable
+    `(tool_name: str, arguments: dict) -> str` that actually runs the tool
+    (e.g. Custos.mcp_client.MCPClient.call_tool) and returns its text
+    result, raising on failure. When the model's reply includes
+    `tool_calls`, chat() runs each through tool_executor, feeds the
+    results back as role="tool" messages, and re-calls the model - up to
+    max_tool_iterations rounds - until it replies with plain content
+    instead of more tool calls. If tool_executor is not given, tools are
+    still advertised to the model but any tool_calls in the reply are
+    left for the caller to resolve (response.message.tool_calls).
+
+    Raises RuntimeError if the server is unreachable or returns an error.
+    MCPClientError (a RuntimeError subclass) propagates uncaught if a
+    tool_executor call fails - the exchange up to that point is not
+    recorded, mirroring how a network failure mid-chat isn't recorded.
+    """
+    working_messages = list(messages)
+    tool_trace: List[Message] = []
+
+    response = _chat_once(model, working_messages, tools, base_url, timeout)
+
+    iterations = 0
+    while (
+        tool_executor is not None
+        and response.message.tool_calls
+        and iterations < max_tool_iterations
+    ):
+        iterations += 1
+        assistant_turn = response.message
+        working_messages.append(assistant_turn)
+        tool_trace.append(assistant_turn)
+
+        for call in assistant_turn.tool_calls:
+            function = call.get("function", {})
+            tool_name = function.get("name", "")
+            arguments = function.get("arguments") or {}
+            try:
+                result_text = tool_executor(tool_name, arguments)
+            except Exception as e:
+                result_text = f"Error: {e}"
+                logger.warning("Tool '%s' failed during chat: %s", tool_name, e)
+
+            tool_message = Message("tool", result_text, tool_name=tool_name)
+            working_messages.append(tool_message)
+            tool_trace.append(tool_message)
+
+        response = _chat_once(model, working_messages, tools, base_url, timeout)
+
+    if iterations >= max_tool_iterations and response.message.tool_calls:
+        logger.warning(
+            "Chat with '%s' hit max_tool_iterations (%d) with tool calls still "
+            "pending - returning the model's last tool-call turn as-is",
+            model, max_tool_iterations,
+        )
+
+    response.tool_trace = tool_trace
 
     if record:
         _record_conversation(model, messages, response.message)
+        _record_tool_trace(model, tool_trace)
 
-    logger.info("Chat with '%s' completed (%s eval tokens)", model, response.eval_count)
+    logger.info("Chat with '%s' completed (%s eval tokens, %d tool round(s))",
+                model, response.eval_count, iterations)
     return response
 
 

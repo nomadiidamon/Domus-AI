@@ -18,6 +18,23 @@ from Janus import main
 
 pytestmark = pytest.mark.janus
 
+# Captured before the autouse fixture below patches Janus.main._setup_filesystem_tools,
+# so TestSetupFilesystemTools can exercise the real implementation directly.
+_real_setup_filesystem_tools = main._setup_filesystem_tools
+
+
+@pytest.fixture(autouse=True)
+def _no_real_mcp_servers():
+    """
+    handle_chat launches the model's filesystem MCP server as a real
+    subprocess when its profile allows it (mercury's does). Keep every
+    test in this module hermetic by default: no subprocess, no tools.
+    Tests exercising the tool path patch Janus.main._setup_filesystem_tools
+    themselves, which takes precedence over this fixture's patch.
+    """
+    with patch("Janus.main._setup_filesystem_tools", return_value=(None, None)):
+        yield
+
 
 class TestHandleStart:
     def test_exits_1_when_no_model_given(self, capsys):
@@ -349,7 +366,7 @@ class TestHandleChat:
         full growing history to chat_with_model each turn must not cause
         earlier turns to be re-recorded into AIMemory. A 2-turn chat must
         record exactly 4 entries (2 user + 2 assistant), not 6+."""
-        def fake_chat(model, history, record=True):
+        def fake_chat(model, history, record=True, **_kwargs):
             resp = MagicMock()
             resp.content = "reply"
             resp.message.role = "assistant"
@@ -539,6 +556,261 @@ class TestHandleChatSlashCommands:
              patch("builtins.input", side_effect=["/note hi", "quit"]):
             main.handle_chat(["mercury"])
         mock_chat.assert_not_called()
+
+
+class TestSetupFilesystemTools:
+    """_setup_filesystem_tools: launches the filesystem MCP server when a
+    model's profile grants it, converts+filters its live tools for
+    chat_with_model, and degrades to (None, None) on any failure rather
+    than raising - a broken/missing MCP setup must never break chat."""
+
+    def test_returns_none_when_no_profile_for_model(self):
+        from Custos.mcp import ProfileNotFoundError
+        with patch("Custos.mcp.MCPManager.get_tools",
+                   side_effect=ProfileNotFoundError("nope")):
+            client, tools = _real_setup_filesystem_tools("no-such-model")
+        assert client is None
+        assert tools is None
+
+    def test_returns_none_when_filesystem_not_in_profile(self):
+        with patch("Custos.mcp.MCPManager.get_tools", return_value={"git": ["git_status"]}):
+            client, tools = _real_setup_filesystem_tools("some-model")
+        assert client is None
+        assert tools is None
+
+    def test_launches_client_and_converts_tools_when_permitted(self):
+        fake_client = MagicMock()
+        fake_client.list_tools.return_value = [
+            {"name": "read_file", "description": "Read a file",
+             "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}}},
+            {"name": "write_file", "description": "Write a file", "inputSchema": {}},
+        ]
+        with patch("Custos.mcp.MCPManager.get_tools",
+                   return_value={"filesystem": ["read_file"]}), \
+             patch("Custos.mcp.MCPManager.get_server_config", return_value={"command": "python3"}), \
+             patch("Custos.mcp_client.MCPClient", return_value=fake_client):
+            client, tools = _real_setup_filesystem_tools("mercury")
+
+        assert client is fake_client
+        fake_client.start.assert_called_once()
+        # only read_file survives the allowlist filter, converted to Ollama's shape
+        assert len(tools) == 1
+        assert tools[0]["type"] == "function"
+        assert tools[0]["function"]["name"] == "read_file"
+
+    def test_returns_none_and_closes_client_when_nothing_permitted(self):
+        """filesystem is in the profile's server list but none of the
+        server's live tools survive the allowlist filter."""
+        fake_client = MagicMock()
+        fake_client.list_tools.return_value = [{"name": "some_other_tool", "inputSchema": {}}]
+        with patch("Custos.mcp.MCPManager.get_tools",
+                   return_value={"filesystem": ["read_file"]}), \
+             patch("Custos.mcp.MCPManager.get_server_config", return_value={"command": "python3"}), \
+             patch("Custos.mcp_client.MCPClient", return_value=fake_client):
+            client, tools = _real_setup_filesystem_tools("mercury")
+
+        assert client is None
+        assert tools is None
+        fake_client.close.assert_called_once()
+
+    def test_returns_none_when_client_fails_to_launch(self, capsys):
+        from Custos.mcp_client import MCPClientError
+        fake_client = MagicMock()
+        fake_client.start.side_effect = MCPClientError("failed to launch")
+        with patch("Custos.mcp.MCPManager.get_tools",
+                   return_value={"filesystem": ["read_file"]}), \
+             patch("Custos.mcp.MCPManager.get_server_config", return_value={"command": "python3"}), \
+             patch("Custos.mcp_client.MCPClient", return_value=fake_client):
+            client, tools = _real_setup_filesystem_tools("mercury")
+
+        assert client is None
+        assert tools is None
+        assert "chatting without tools" in capsys.readouterr().out
+
+    def test_returns_none_on_unexpected_error(self, capsys):
+        with patch("Custos.mcp.MCPManager.get_tools", side_effect=ValueError("weird")):
+            client, tools = _real_setup_filesystem_tools("mercury")
+        assert client is None
+        assert tools is None
+        assert "Could not set up MCP tools" in capsys.readouterr().out
+
+
+class TestHandleChatWithMCPTools:
+    """handle_chat's wiring of MCP tools into the chat loop: tools are
+    passed to chat_with_model, tool calls are executed and printed, the
+    trace is folded into history/memory, and the client is always closed
+    on exit - success, error, or interrupt."""
+
+    def _tools(self):
+        return [{"type": "function", "function": {"name": "read_file", "description": "read"}}]
+
+    def test_no_tools_flag_skips_setup_entirely(self):
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._setup_filesystem_tools") as mock_setup, \
+             patch("builtins.input", side_effect=["quit"]):
+            main.handle_chat(["mercury", "--no-tools"])
+        mock_setup.assert_not_called()
+
+    def test_tools_setup_called_when_not_disabled(self):
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._setup_filesystem_tools", return_value=(None, None)) as mock_setup, \
+             patch("builtins.input", side_effect=["quit"]):
+            main.handle_chat(["mercury"])
+        mock_setup.assert_called_once_with("mercury")
+
+    def test_banner_printed_when_tools_enabled(self, capsys):
+        fake_client = MagicMock()
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._setup_filesystem_tools",
+                   return_value=(fake_client, self._tools())), \
+             patch("builtins.input", side_effect=["quit"]):
+            main.handle_chat(["mercury"])
+        assert "filesystem tools available: read_file" in capsys.readouterr().out
+
+    def test_no_banner_when_tools_unavailable(self, capsys):
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._setup_filesystem_tools", return_value=(None, None)), \
+             patch("builtins.input", side_effect=["quit"]):
+            main.handle_chat(["mercury"])
+        assert "filesystem tools available" not in capsys.readouterr().out
+
+    def test_tools_and_executor_passed_to_chat_with_model(self):
+        fake_client = MagicMock()
+        tools = self._tools()
+        mock_response = MagicMock()
+        mock_response.content = "ok"
+        mock_response.message.role = "assistant"
+        mock_response.message.content = "ok"
+        mock_response.tool_trace = []
+
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, tools)), \
+             patch("Janus.main.chat_with_model", return_value=mock_response) as mock_chat, \
+             patch("builtins.input", side_effect=["hi", "quit"]):
+            main.handle_chat(["mercury"])
+
+        assert mock_chat.call_args.kwargs.get("tools") is tools
+        assert callable(mock_chat.call_args.kwargs.get("tool_executor"))
+
+    def test_no_tools_kwarg_passed_when_disabled_via_flag(self):
+        mock_response = MagicMock()
+        mock_response.content = "ok"
+        mock_response.message.role = "assistant"
+        mock_response.message.content = "ok"
+        mock_response.tool_trace = []
+
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main.chat_with_model", return_value=mock_response) as mock_chat, \
+             patch("builtins.input", side_effect=["hi", "quit"]):
+            main.handle_chat(["mercury", "--no-tools"])
+
+        assert mock_chat.call_args.kwargs.get("tools") is None
+        assert mock_chat.call_args.kwargs.get("tool_executor") is None
+
+    def test_tool_call_round_trip_prints_and_records(self, capsys):
+        fake_client = MagicMock()
+        fake_client.call_tool.return_value = "42"
+        tools = self._tools()
+
+        def fake_chat_with_model(model, history, record=False, tools=None, tool_executor=None):
+            # Exercise the real executor the way Faber.messaging.chat() would
+            result_text = tool_executor("read_file", {"path": "a.txt"})
+            assert result_text == "42"
+            from Faber.messaging import Message, ChatResponse
+            trace = [
+                Message("assistant", "", tool_calls=[{"function": {"name": "read_file", "arguments": {"path": "a.txt"}}}]),
+                Message("tool", "42", tool_name="read_file"),
+            ]
+            resp = ChatResponse(model=model, message=Message("assistant", "The answer is 42."))
+            resp.tool_trace = trace
+            return resp
+
+        fake_ctx = MagicMock()
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, tools)), \
+             patch("Janus.main._get_context", return_value=fake_ctx), \
+             patch("Janus.main.chat_with_model", side_effect=fake_chat_with_model), \
+             patch("builtins.input", side_effect=["what is the answer?", "quit"]):
+            main.handle_chat(["mercury"])
+
+        out = capsys.readouterr().out
+        assert "[TOOL] read_file(" in out
+        assert "42" in out
+        assert "The answer is 42." in out
+        fake_client.call_tool.assert_called_once_with("read_file", {"path": "a.txt"})
+
+    def test_tool_trace_recorded_into_memory(self):
+        fake_client = MagicMock()
+        fake_client.call_tool.return_value = "42"
+        tools = self._tools()
+
+        def fake_chat_with_model(model, history, record=False, tools=None, tool_executor=None):
+            tool_executor("read_file", {"path": "a.txt"})
+            from Faber.messaging import Message, ChatResponse
+            trace = [
+                Message("assistant", "", tool_calls=[{"function": {"name": "read_file", "arguments": {}}}]),
+                Message("tool", "42", tool_name="read_file"),
+            ]
+            resp = ChatResponse(model=model, message=Message("assistant", "done"))
+            resp.tool_trace = trace
+            return resp
+
+        recorded = []
+        fake_ctx = MagicMock()
+        fake_ctx.update_ai_memory.side_effect = (
+            lambda role, content, metadata=None: recorded.append((role, content, metadata))
+        )
+
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, tools)), \
+             patch("Janus.main._get_context", return_value=fake_ctx), \
+             patch("Janus.main.chat_with_model", side_effect=fake_chat_with_model), \
+             patch("builtins.input", side_effect=["ask something", "quit"]):
+            main.handle_chat(["mercury"])
+
+        roles_and_names = [(r, m.get("tool_name") if m else None) for r, c, m in recorded]
+        assert ("tool", "read_file") in roles_and_names
+
+    def test_client_closed_on_normal_exit(self):
+        fake_client = MagicMock()
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, self._tools())), \
+             patch("builtins.input", side_effect=["quit"]):
+            main.handle_chat(["mercury"])
+        fake_client.close.assert_called_once()
+
+    def test_client_closed_on_eof(self):
+        fake_client = MagicMock()
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, self._tools())), \
+             patch("builtins.input", side_effect=EOFError):
+            main.handle_chat(["mercury"])
+        fake_client.close.assert_called_once()
+
+    def test_client_closed_on_keyboard_interrupt(self):
+        fake_client = MagicMock()
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, self._tools())), \
+             patch("builtins.input", side_effect=KeyboardInterrupt):
+            main.handle_chat(["mercury"])
+        fake_client.close.assert_called_once()
+
+    def test_client_closed_when_chat_with_model_raises(self):
+        fake_client = MagicMock()
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, self._tools())), \
+             patch("Janus.main.chat_with_model", side_effect=RuntimeError("boom")), \
+             patch("builtins.input", side_effect=["hi", "quit"]):
+            main.handle_chat(["mercury"])
+        fake_client.close.assert_called_once()
+
+    def test_not_closed_when_setup_returned_none(self):
+        """No client was ever created - nothing to close, and closing
+        None must not be attempted."""
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._setup_filesystem_tools", return_value=(None, None)), \
+             patch("builtins.input", side_effect=["quit"]):
+            main.handle_chat(["mercury"])  # would raise if None.close() were attempted
  
  
 class TestHandleHistory:

@@ -16,12 +16,19 @@ from .mcp import (
     MCPManager,
     Permission,
     ProfileNotFoundError,
+    filter_tools_for_model,
+    mcp_tools_to_ollama_tools,
 )
+from .mcp_client import MCPClient, MCPClientError
 
 __all__ = [
     "Approval",
+    "MCPClient",
+    "MCPClientError",
     "MCPConfigError",
     "MCPManager",
     "Permission",
     "ProfileNotFoundError",
+    "filter_tools_for_model",
+    "mcp_tools_to_ollama_tools",
 ]
