@@ -332,7 +332,7 @@ class _Spinner:
     other output since it always clears its own line on stop().
     """
  
-    _FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    _FRAMES = ["[=    ]", "[==   ]", "[===  ]", "[==== ]", "[=====]", "[ ====]", "[  ===]", "[   ==]", "[    =]"]
  
     def __init__(self, message: str = "thinking", interval: float = 0.08,
                  color: str = "", endc: str = ""):
