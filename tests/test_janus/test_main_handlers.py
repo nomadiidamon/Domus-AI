@@ -10,6 +10,8 @@ logic, not re-testing Faber or doctor (already covered in their own
 modules).
 """
 
+import re
+import time
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -17,6 +19,15 @@ import pytest
 from Janus import main
 
 pytestmark = pytest.mark.janus
+
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Remove ANSI color escape codes so chat output can be asserted on
+    by plain substring, regardless of which color run a given word falls
+    in (handle_chat's banners/tool previews are printed in color)."""
+    return _ANSI_RE.sub("", text)
 
 # Captured before the autouse fixture below patches Janus.main._setup_filesystem_tools,
 # so TestSetupFilesystemTools can exercise the real implementation directly.
@@ -665,7 +676,8 @@ class TestHandleChatWithMCPTools:
                    return_value=(fake_client, self._tools())), \
              patch("builtins.input", side_effect=["quit"]):
             main.handle_chat(["mercury"])
-        assert "filesystem tools available: read_file" in capsys.readouterr().out
+        out = _strip_ansi(capsys.readouterr().out)
+        assert "filesystem tools available: read_file" in out
 
     def test_no_banner_when_tools_unavailable(self, capsys):
         with patch("Janus.main.start_ollama"), \
@@ -733,11 +745,37 @@ class TestHandleChatWithMCPTools:
              patch("builtins.input", side_effect=["what is the answer?", "quit"]):
             main.handle_chat(["mercury"])
 
-        out = capsys.readouterr().out
+        out = _strip_ansi(capsys.readouterr().out)
         assert "[TOOL] read_file(" in out
         assert "42" in out
         assert "The answer is 42." in out
         fake_client.call_tool.assert_called_once_with("read_file", {"path": "a.txt"})
+
+    def test_tool_preview_shows_end_marker_even_when_short(self, capsys):
+        """A tool result under the 200-char truncation threshold must still
+        print **END TOOL PREVIEW** - previously that marker was only ever
+        appended on the truncation branch, so short results silently
+        dropped it."""
+        fake_client = MagicMock()
+        fake_client.call_tool.return_value = "42"
+        tools = self._tools()
+
+        def fake_chat_with_model(model, history, record=False, tools=None, tool_executor=None):
+            tool_executor("read_file", {"path": "a.txt"})
+            from Faber.messaging import Message, ChatResponse
+            resp = ChatResponse(model=model, message=Message("assistant", "done"))
+            resp.tool_trace = []
+            return resp
+
+        with patch("Janus.main.start_ollama"), \
+             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, tools)), \
+             patch("Janus.main.chat_with_model", side_effect=fake_chat_with_model), \
+             patch("builtins.input", side_effect=["hi", "quit"]):
+            main.handle_chat(["mercury"])
+
+        out = _strip_ansi(capsys.readouterr().out)
+        assert "**START TOOL PREVIEW**" in out
+        assert "**END TOOL PREVIEW**" in out
 
     def test_tool_trace_recorded_into_memory(self):
         fake_client = MagicMock()
@@ -1113,3 +1151,62 @@ class TestPrintHelp:
         captured = capsys.readouterr()
         for command in ["start", "stop", "status", "build", "doctor", "mcp", "help"]:
             assert command in captured.out
+
+
+class TestSpinner:
+    """_Spinner is the CLI 'thinking' indicator shown while chat_with_model
+    blocks. These tests cover its lifecycle in isolation (start/stop,
+    idempotence, context-manager cleanup on exception) rather than
+    re-testing handle_chat's wiring, which TestHandleChat already covers
+    the output of."""
+
+    def test_start_runs_a_background_thread(self):
+        spinner = main._Spinner("working", interval=0.01)
+        spinner.start()
+        try:
+            assert spinner._thread is not None
+            assert spinner._thread.is_alive()
+        finally:
+            spinner.stop()
+
+    def test_stop_joins_thread_and_clears_line(self, capsys):
+        spinner = main._Spinner("working", interval=0.01)
+        spinner.start()
+        time.sleep(0.03)  # let it render at least one frame
+        spinner.stop()
+
+        assert spinner._thread is None
+        out = capsys.readouterr().out
+        # Last thing written should be the clear sequence, not a spinner
+        # frame - i.e. output ends with carriage returns/spaces, not a
+        # braille frame character glued to "working...".
+        assert out.endswith("\r")
+
+    def test_double_stop_is_a_noop(self):
+        spinner = main._Spinner("working", interval=0.01)
+        spinner.start()
+        spinner.stop()
+        spinner.stop()  # must not raise
+        assert spinner._thread is None
+
+    def test_context_manager_stops_on_exception(self):
+        spinner = main._Spinner("working", interval=0.01)
+        with pytest.raises(ValueError):
+            with spinner:
+                assert spinner._thread is not None
+                raise ValueError("boom")
+        assert spinner._thread is None
+
+    def test_context_manager_returns_the_spinner(self):
+        with main._Spinner("working", interval=0.01) as spinner:
+            assert isinstance(spinner, main._Spinner)
+
+    def test_start_is_idempotent(self):
+        spinner = main._Spinner("working", interval=0.01)
+        spinner.start()
+        first_thread = spinner._thread
+        spinner.start()  # should not replace the running thread
+        try:
+            assert spinner._thread is first_thread
+        finally:
+            spinner.stop()

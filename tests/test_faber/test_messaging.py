@@ -86,6 +86,120 @@ class TestChat:
             with pytest.raises(RuntimeError, match="unreachable"):
                 chat("mercury", [Message("user", "hi")])
 
+
+class TestChatFallbackToolCallParsing:
+    """
+    Some models (qwen2.5-coder-based ones, e.g. Mercury) don't emit
+    Ollama's native tool_calls field - they describe the call as JSON
+    text in `content` instead, in one of a few shapes (bare JSON object,
+    ```json fenced block, <tool_call> tag, or a JSON array of calls).
+    chat() should recover these into response.message.tool_calls exactly
+    as if the model had used the native field, so the rest of the tool
+    loop (and Janus.main's tool_executor) doesn't need to know the
+    difference. This fallback only kicks in when tools were actually
+    offered on the request - plain conversational JSON in a reply to a
+    tool-less chat must never be misread as a tool call.
+    """
+
+    _TOOLS = [{"type": "function", "function": {
+        "name": "read_file", "description": "", "parameters": {}}}]
+
+    def _payload(self, content: str) -> dict:
+        return {"model": "mercury",
+                "message": {"role": "assistant", "content": content},
+                "done": True}
+
+    def test_recovers_bare_json_object(self):
+        content = '{"name": "read_file", "arguments": {"path": "a.txt"}}'
+        with patch("urllib.request.urlopen", return_value=_http_response(self._payload(content))):
+            response = chat("mercury", [Message("user", "read a.txt")], tools=self._TOOLS)
+
+        assert response.message.tool_calls == [
+            {"function": {"name": "read_file", "arguments": {"path": "a.txt"}}}
+        ]
+        # The recovered JSON shouldn't also be surfaced as the reply text.
+        assert response.content == ""
+
+    def test_recovers_json_fenced_in_code_block(self):
+        content = (
+            "Sure, I'll read that file.\n"
+            "```json\n"
+            '{"name": "read_file", "arguments": {"path": "a.txt"}}\n'
+            "```"
+        )
+        with patch("urllib.request.urlopen", return_value=_http_response(self._payload(content))):
+            response = chat("mercury", [Message("user", "read a.txt")], tools=self._TOOLS)
+
+        assert response.message.tool_calls == [
+            {"function": {"name": "read_file", "arguments": {"path": "a.txt"}}}
+        ]
+
+    def test_recovers_tool_call_tag(self):
+        content = '<tool_call>{"name": "read_file", "arguments": {"path": "a.txt"}}</tool_call>'
+        with patch("urllib.request.urlopen", return_value=_http_response(self._payload(content))):
+            response = chat("mercury", [Message("user", "read a.txt")], tools=self._TOOLS)
+
+        assert response.message.tool_calls == [
+            {"function": {"name": "read_file", "arguments": {"path": "a.txt"}}}
+        ]
+
+    def test_recovers_json_array_of_calls(self):
+        content = (
+            '[{"name": "read_file", "arguments": {"path": "a.txt"}}, '
+            '{"name": "read_file", "arguments": {"path": "b.txt"}}]'
+        )
+        with patch("urllib.request.urlopen", return_value=_http_response(self._payload(content))):
+            response = chat("mercury", [Message("user", "read both files")], tools=self._TOOLS)
+
+        assert response.message.tool_calls == [
+            {"function": {"name": "read_file", "arguments": {"path": "a.txt"}}},
+            {"function": {"name": "read_file", "arguments": {"path": "b.txt"}}},
+        ]
+
+    def test_native_tool_calls_take_priority_over_content(self):
+        """If Ollama did populate tool_calls natively, the fallback parser
+        must not run at all - even if content happens to contain JSON."""
+        payload = {
+            "model": "mercury",
+            "message": {
+                "role": "assistant",
+                "content": '{"not": "a real call, just noise"}',
+                "tool_calls": [{"function": {"name": "read_file", "arguments": {"path": "x"}}}],
+            },
+            "done": True,
+        }
+        with patch("urllib.request.urlopen", return_value=_http_response(payload)):
+            response = chat("mercury", [Message("user", "hi")], tools=self._TOOLS)
+
+        assert response.message.tool_calls == [
+            {"function": {"name": "read_file", "arguments": {"path": "x"}}}
+        ]
+        # content is left untouched when no fallback parse happened
+        assert response.message.content == '{"not": "a real call, just noise"}'
+
+    def test_no_fallback_when_tools_not_offered(self):
+        """Plain chat (no tools= passed) must never have ordinary text
+        misread as a tool call, even if it happens to look like JSON."""
+        content = '{"name": "read_file", "arguments": {"path": "a.txt"}}'
+        with patch("urllib.request.urlopen", return_value=_http_response(self._payload(content))):
+            response = chat("mercury", [Message("user", "hi")])
+
+        assert response.message.tool_calls is None
+        assert response.content == content
+
+    def test_ordinary_reply_with_tools_offered_is_left_alone(self):
+        """A normal non-JSON reply to a tools-enabled chat must pass
+        through unchanged - the fallback parser should find nothing to
+        recover and leave content/tool_calls as-is."""
+        content = "The capital of France is Paris."
+        with patch("urllib.request.urlopen", return_value=_http_response(self._payload(content))):
+            response = chat("mercury", [Message("user", "capital of France?")], tools=self._TOOLS)
+
+        assert response.message.tool_calls is None
+        assert response.content == content
+
+
+class TestChatRecording:
     def test_records_exchange_into_bound_context(self):
         payload = {"model": "mercury",
                    "message": {"role": "assistant", "content": "pong"},

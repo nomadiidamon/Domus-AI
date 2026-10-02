@@ -3,7 +3,7 @@
   "description": "Heavy analysis/review agent",
   "servers": ["filesystem", "fetch"],
   "allowed_tools": {
-    "filesystem": ["read_file", "list_directory", "search_files", "read_external_file"],
+    "filesystem": ["read_file", "write_file", "edit_file", "list_directory", "search_files", "read_external_file"],
     "fetch": ["fetch"]
   }
 }

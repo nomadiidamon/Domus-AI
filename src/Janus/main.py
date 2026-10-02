@@ -1,6 +1,9 @@
 # Handles all AI Runtime commands. Should be the main entry point for the CLI.
+import itertools
 import sys
 import logging
+import threading
+import time
 from typing import Optional
 from unittest import result
 
@@ -311,6 +314,71 @@ def _print_chat_help(tools_enabled: bool) -> None:
     )
 
 
+class _Spinner:
+    """
+    Simple terminal 'thinking' indicator for a blocking call (e.g. a chat
+    request that may take a while, especially with tool round-trips).
+ 
+    Runs a small braille-dot animation on a background thread and
+    overwrites it in place (\\r, no newline) so it never pushes the
+    model's eventual reply down the screen. Used as a context manager:
+ 
+        with _Spinner("model is thinking"):
+            response = chat_with_model(...)
+ 
+    Safe to use even when stdout isn't a real terminal (e.g. captured by
+    pytest or piped) - it just prints plain carriage-return-separated
+    frames, which is harmless, not animated-looking, but never corrupts
+    other output since it always clears its own line on stop().
+    """
+ 
+    _FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+ 
+    def __init__(self, message: str = "thinking", interval: float = 0.08,
+                 color: str = "", endc: str = ""):
+        self._message = message
+        self._interval = interval
+        self._color = color
+        self._endc = endc
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+ 
+    def _spin(self) -> None:
+        for frame in itertools.cycle(self._FRAMES):
+            if self._stop_event.is_set():
+                break
+            line = f"\r{self._color}{frame} {self._message}...{self._endc}"
+            sys.stdout.write(line)
+            sys.stdout.flush()
+            self._stop_event.wait(self._interval)
+ 
+    def start(self) -> "_Spinner":
+        if self._thread is not None:
+            return self
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._spin, daemon=True)
+        self._thread.start()
+        return self
+ 
+    def stop(self) -> None:
+        if self._thread is None:
+            return
+        self._stop_event.set()
+        self._thread.join(timeout=1)
+        self._thread = None
+        # Clear the spinner line so the next print (the reply, or an
+        # error) starts clean rather than appending after the frame.
+        clear_width = len(self._message) + 6
+        sys.stdout.write("\r" + " " * clear_width + "\r")
+        sys.stdout.flush()
+ 
+    def __enter__(self) -> "_Spinner":
+        return self.start()
+ 
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.stop()
+
+
 def _setup_filesystem_tools(model: str):
     """
     If `model`'s MCP profile grants access to the "filesystem" server,
@@ -428,27 +496,45 @@ def handle_chat(args: list) -> None:
     permitted_tool_names = set()
     if tools_enabled:
         permitted_tool_names = {t["function"]["name"] for t in ollama_tools}
-        print(f"{PrintColors.OKCYAN}[TOOLS] filesystem tools available: {PrintColors.OKGREEN}{', '.join(permitted_tool_names)}{PrintColors.ENDC}")
+        print(
+            f"{PrintColors.OKCYAN}[TOOLS] filesystem tools available: {PrintColors.ENDC}"
+            f"{PrintColors.OKGREEN}{', '.join(permitted_tool_names)}{PrintColors.ENDC}"
+        )
         print("\n")
 
+    # Holds the active _Spinner (if any) so tool_executor can silence it
+    # for the duration of its own prints and restart it afterward -
+    # otherwise the spinner's background thread and the tool's [TOOL]
+    # prints would interleave into garbled output, since both write to
+    # stdout from the same blocking chat_with_model() call.
+    active_spinner: dict = {"spinner": None}
+
     def tool_executor(tool_name: str, arguments: dict) -> str:
-        # Enforce the profile allowlist at call time, not just at
-        # advertisement time. The model can request any tool name it likes
-        # (hallucination, or prompt injection via file contents it read),
-        # so only tools that were actually offered may run.
-        if tool_name not in permitted_tool_names:
-            print(f"\n{PrintColors.FAIL}  [TOOL] {tool_name}({arguments})")
-            print(f"  [TOOL] -> DENIED (not permitted for this model's MCP profile){PrintColors.ENDC}")
-            raise PermissionError(
-                f"Tool '{tool_name}' is not permitted for model '{model}'. "
-                f"Available tools: {', '.join(sorted(permitted_tool_names))}"
-            )
-        print(f"\n\n{PrintColors.OKYELLOW}  [TOOL] {tool_name}({arguments}){PrintColors.ENDC}")
-        result = mcp_client.call_tool(tool_name, arguments)
-        preview = result if len(result) <= 200 else result[:200] + "...\n\n**END TOOL PREVIEW**\n\n"
-        preview = "**START TOOL PREVIEW**\n\n" + preview
-        print(f"{PrintColors.OKCYAN}  [TOOL] ->\n{preview}{PrintColors.ENDC}")
-        return result
+        spinner = active_spinner["spinner"]
+        if spinner is not None:
+            spinner.stop()
+        try:
+            # Enforce the profile allowlist at call time, not just at
+            # advertisement time. The model can request any tool name it
+            # likes (hallucination, or prompt injection via file contents
+            # it read), so only tools that were actually offered may run.
+            if tool_name not in permitted_tool_names:
+                print(f"\n{PrintColors.FAIL}  [TOOL] {tool_name}({arguments})")
+                print(f"  [TOOL] -> DENIED (not permitted for this model's MCP profile){PrintColors.ENDC}")
+                raise PermissionError(
+                    f"Tool '{tool_name}' is not permitted for model '{model}'. "
+                    f"Available tools: {', '.join(sorted(permitted_tool_names))}"
+                )
+            print(f"\n\n{PrintColors.OKYELLOW}  [TOOL] {tool_name}({arguments}){PrintColors.ENDC}")
+            result = mcp_client.call_tool(tool_name, arguments)
+            truncated = len(result) > 200
+            body = result[:200] + "..." if truncated else result
+            preview = f"**START TOOL PREVIEW**\n\n{body}\n\n**END TOOL PREVIEW**\n\n"
+            print(f"{PrintColors.OKCYAN}  [TOOL] ->\n{preview}{PrintColors.ENDC}")
+            return result
+        finally:
+            if spinner is not None:
+                spinner.start()
  
     print(f"{PrintColors.HEADER}[CHAT] Chatting with '{model}'{PrintColors.ENDC}")
     print(f"{PrintColors.OKYELLOW}{PrintColors.ITALICS}\tType 'exit' or 'quit' to end (Ctrl+C/Ctrl+D also work){PrintColors.ENDC}")
@@ -456,36 +542,43 @@ def handle_chat(args: list) -> None:
     history: list = []
 
     try:
-
+ 
         while True:
             try:
                 user_input = input(f"\n{PrintColors.OKGREEN}You: {PrintColors.ENDC}").strip()
             except (EOFError, KeyboardInterrupt):
                 print("\n[OK] Chat ended")
                 return
-
+ 
             if not user_input:
                 continue
-
+ 
             if user_input.lower() in ("exit", "quit"):
                 print("[OK] Chat ended")
                 return
-
+ 
             if user_input.startswith("/"):
                 _handle_chat_slash_command(user_input, ctx, history, tools_enabled, ollama_tools)
                 continue
-
+ 
             history.append(Message("user", user_input))
-
+ 
             try:
                 # record=False: we record exactly the new turn ourselves below,
                 # rather than letting the API re-record the whole history list
                 # (which grows every turn) and duplicate every earlier message.
-                response = chat_with_model(
-                    model, history, record=False,
-                    tools=ollama_tools if tools_enabled else None,
-                    tool_executor=tool_executor if tools_enabled else None,
-                )
+                spinner = _Spinner(f"{model} is thinking",
+                                    color=PrintColors.OKCYAN, endc=PrintColors.ENDC)
+                active_spinner["spinner"] = spinner
+                try:
+                    with spinner:
+                        response = chat_with_model(
+                            model, history, record=False,
+                            tools=ollama_tools if tools_enabled else None,
+                            tool_executor=tool_executor if tools_enabled else None,
+                        )
+                finally:
+                    active_spinner["spinner"] = None
             except RuntimeError as e:
                 logger.error(f"Chat request failed: {e}")
                 print(f"[X] Error: {e}")
@@ -497,7 +590,7 @@ def handle_chat(args: list) -> None:
                 print(f"[X] Unexpected error: {e}")
                 history.pop()
                 continue
-
+ 
             # Tool-call turns the loop already resolved (assistant request +
             # tool result pairs) - fold into history so the next turn's
             # context includes them, and record them the same way the API's
@@ -512,10 +605,10 @@ def handle_chat(args: list) -> None:
                         metadata["tool_name"] = trace_message.tool_name
                     ctx.update_ai_memory(trace_message.role, trace_message.content,
                                           metadata=metadata)
-
+ 
             history.append(Message(response.message.role, response.message.content))
             print(f"\n{PrintColors.OKBLUE}{model}: {PrintColors.ENDC}{response.content}\n")
-
+ 
             if ctx is not None:
                 ctx.update_ai_memory("user", user_input)
                 ctx.update_ai_memory(response.message.role, response.message.content,

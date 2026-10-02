@@ -1,6 +1,7 @@
 # Messaging to and from models via Ollama's HTTP API (stdlib urllib only).
 import json
 import logging
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -78,14 +79,111 @@ def _post_json(url: str, body: dict, timeout: int) -> dict:
         ) from e
 
 
-def _parse_chat_response(payload: dict, model: str) -> ChatResponse:
+
+# Matches a fenced ```json ... ``` or bare ``` ... ``` block, to unwrap a
+# tool call some models (qwen2.5-coder in particular) wrap in a code fence
+# instead of emitting Ollama's native tool_calls.
+_CODE_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
+ 
+# Matches a <tool_call>...</tool_call> wrapper (Hermes/Qwen convention) -
+# some templates emit this as literal text instead of a native tool call.
+_TOOL_CALL_TAG_RE = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
+ 
+ 
+def _coerce_tool_call_dict(obj: Any) -> Optional[Dict[str, Any]]:
+    """If obj looks like a single tool-call object (has a tool/function name
+    plus arguments, under any of the common key spellings), return it
+    reshaped to Ollama's {"function": {"name", "arguments"}} shape.
+    Returns None if obj doesn't look like a tool call at all."""
+    if not isinstance(obj, dict):
+        return None
+ 
+    # Already Ollama-shaped: {"function": {"name": ..., "arguments": ...}}
+    if isinstance(obj.get("function"), dict) and "name" in obj["function"]:
+        function = obj["function"]
+        return {"function": {
+            "name": function["name"],
+            "arguments": function.get("arguments") or {},
+        }}
+ 
+    name = obj.get("name") or obj.get("tool") or obj.get("tool_name")
+    if not name:
+        return None
+    arguments = obj.get("arguments") or obj.get("parameters") or obj.get("input") or {}
+    if not isinstance(arguments, dict):
+        return None
+    return {"function": {"name": name, "arguments": arguments}}
+ 
+ 
+def _extract_fallback_tool_calls(content: str) -> List[Dict[str, Any]]:
+    """
+    Best-effort recovery of tool calls a model described as JSON text in
+    `content` instead of Ollama's native tool_calls field - seen with
+    qwen2.5-coder-based models (e.g. Mercury), which frequently emit
+    {"name": ..., "arguments": ...}, a ```json ... ``` fenced version of
+    the same, or a <tool_call>...</tool_call>-wrapped version, rather
+    than populating the structured field.
+ 
+    Tries, in order: a <tool_call> tag, a fenced code block, then the
+    raw content itself. Accepts either a single tool-call object or a
+    JSON array of them. Returns [] if nothing in `content` looks like a
+    tool call - callers should treat that as "no tool calls", not an error.
+    """
+    if not content or not content.strip():
+        return []
+ 
+    candidates = []
+    tag_match = _TOOL_CALL_TAG_RE.search(content)
+    if tag_match:
+        candidates.append(tag_match.group(1))
+    fence_match = _CODE_FENCE_RE.search(content)
+    if fence_match:
+        candidates.append(fence_match.group(1))
+    candidates.append(content)
+ 
+    for candidate in candidates:
+        candidate = candidate.strip()
+        if not candidate:
+            continue
+        try:
+            parsed = json.loads(candidate)
+        except (json.JSONDecodeError, ValueError):
+            continue
+ 
+        items = parsed if isinstance(parsed, list) else [parsed]
+        calls = [c for c in (_coerce_tool_call_dict(item) for item in items) if c is not None]
+        if calls:
+            return calls
+ 
+    return []
+
+
+def _parse_chat_response(payload: dict, model: str,
+                          tools_offered: bool = False) -> ChatResponse:
     raw_message = payload.get("message") or {}
+    content = raw_message.get("content", "")
+    tool_calls = raw_message.get("tool_calls") or None
+ 
+    if tool_calls is None and tools_offered:
+        fallback = _extract_fallback_tool_calls(content)
+        if fallback:
+            logger.info(
+                "Model '%s' returned tool call(s) as text instead of native "
+                "tool_calls - recovered %d via fallback parsing", model, len(fallback),
+            )
+            tool_calls = fallback
+            # The call itself is consumed by the fallback parse - don't
+            # also feed the model's own JSON-as-text back to it/the user
+            # as if it were a normal reply.
+            content = ""
+ 
     return ChatResponse(
         model=payload.get("model", model),
         message=Message(
             role=raw_message.get("role", "assistant"),
-            content=raw_message.get("content", ""),
-            tool_calls=raw_message.get("tool_calls") or None,),
+            content=content,
+            tool_calls=tool_calls,
+        ),
         done=payload.get("done", True),
         total_duration_ns=payload.get("total_duration"),
         eval_count=payload.get("eval_count"),
@@ -140,7 +238,7 @@ def _publish(event_type, model: str, message: Message) -> None:
                      exc_info=True)
 
 
-MAX_TOOL_ITERATIONS = 8
+MAX_TOOL_ITERATIONS = 12
 
 
 def _chat_once(model: str, messages: List[Message], tools: Optional[List[Dict[str, Any]]],
@@ -170,7 +268,7 @@ def _chat_once(model: str, messages: List[Message], tools: Optional[List[Dict[st
                  Message("system", f"chat failed: {payload['error']}"))
         raise RuntimeError(f"Ollama chat failed for model '{model}': {payload['error']}")
 
-    response = _parse_chat_response(payload, model)
+    response = _parse_chat_response(payload, model, tools_offered=bool(tools))
     _publish(EventType.MESSAGE_RECEIVED, model, response.message)
     return response
 
@@ -254,7 +352,7 @@ def chat(
     if record:
         _record_conversation(model, messages, response.message)
         _record_tool_trace(model, tool_trace)
-
+    
     logger.info("Chat with '%s' completed (%s eval tokens, %d tool round(s))",
                 model, response.eval_count, iterations)
     return response
