@@ -318,22 +318,22 @@ class _Spinner:
     """
     Simple terminal 'thinking' indicator for a blocking call (e.g. a chat
     request that may take a while, especially with tool round-trips).
- 
+
     Runs a small braille-dot animation on a background thread and
     overwrites it in place (\\r, no newline) so it never pushes the
     model's eventual reply down the screen. Used as a context manager:
- 
+
         with _Spinner("model is thinking"):
             response = chat_with_model(...)
- 
+
     Safe to use even when stdout isn't a real terminal (e.g. captured by
     pytest or piped) - it just prints plain carriage-return-separated
     frames, which is harmless, not animated-looking, but never corrupts
     other output since it always clears its own line on stop().
     """
- 
+
     _FRAMES = ["[=    ]", "[==   ]", "[===  ]", "[==== ]", "[=====]", "[ ====]", "[  ===]", "[   ==]", "[    =]"]
- 
+
     def __init__(self, message: str = "thinking", interval: float = 0.08,
                  color: str = "", endc: str = ""):
         self._message = message
@@ -342,7 +342,7 @@ class _Spinner:
         self._endc = endc
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
- 
+
     def _spin(self) -> None:
         for frame in itertools.cycle(self._FRAMES):
             if self._stop_event.is_set():
@@ -351,7 +351,7 @@ class _Spinner:
             sys.stdout.write(line)
             sys.stdout.flush()
             self._stop_event.wait(self._interval)
- 
+
     def start(self) -> "_Spinner":
         if self._thread is not None:
             return self
@@ -359,7 +359,7 @@ class _Spinner:
         self._thread = threading.Thread(target=self._spin, daemon=True)
         self._thread.start()
         return self
- 
+
     def stop(self) -> None:
         if self._thread is None:
             return
@@ -371,10 +371,10 @@ class _Spinner:
         clear_width = len(self._message) + 6
         sys.stdout.write("\r" + " " * clear_width + "\r")
         sys.stdout.flush()
- 
+
     def __enter__(self) -> "_Spinner":
         return self.start()
- 
+
     def __exit__(self, exc_type, exc, tb) -> None:
         self.stop()
 
@@ -387,6 +387,13 @@ def _setup_filesystem_tools(model: str):
     when the model has no profile, the profile doesn't include
     filesystem, or the server fails to launch - chat proceeds without
     tools in every one of those cases rather than failing the session.
+
+    Superseded by Lares.agent.Agent.setup_tools for handle_chat's own
+    use (which additionally gates on AgentProfile.supports_tool_calls
+    and can launch more than just filesystem) - kept standalone here
+    since it's still correct and still covered by
+    TestSetupFilesystemTools, but handle_chat no longer calls this
+    directly.
     """
     try:
         from Custos.mcp import MCPManager, ProfileNotFoundError, MCPConfigError, \
@@ -487,15 +494,26 @@ def handle_chat(args: list) -> None:
     if ctx is None:
         print("[!] No runtime context bound - this chat will not be saved to memory")
 
-    mcp_client = None
+    from Lares.agent import Agent
+    agent = Agent(model)
+
+    mcp_clients: list = []
     ollama_tools = None
     if not tools_disabled:
-        mcp_client, ollama_tools = _setup_filesystem_tools(model)
+        try:
+            mcp_clients, ollama_tools = agent.setup_tools()
+        except Exception as e:
+            # Mirrors _setup_filesystem_tools' own prior behavior: a
+            # broken/misconfigured MCP setup must never fail the whole
+            # chat session - degrade to chatting without tools instead.
+            logger.warning(f"Could not set up MCP tools for '{model}': {e}")
+            print(f"[!] Could not set up MCP tools ({e}) - chatting without tools")
+            mcp_clients, ollama_tools = [], None
 
-    tools_enabled = mcp_client is not None
+    tools_enabled = bool(ollama_tools)
     permitted_tool_names = set()
     if tools_enabled:
-        permitted_tool_names = {t["function"]["name"] for t in ollama_tools}
+        permitted_tool_names = agent.permitted_tool_names(ollama_tools)
         print(
             f"{PrintColors.OKCYAN}[TOOLS] filesystem tools available: {PrintColors.ENDC}"
             f"{PrintColors.OKGREEN}{', '.join(permitted_tool_names)}{PrintColors.ENDC}"
@@ -526,7 +544,7 @@ def handle_chat(args: list) -> None:
                     f"Available tools: {', '.join(sorted(permitted_tool_names))}"
                 )
             print(f"\n\n{PrintColors.OKYELLOW}  [TOOL] {tool_name}({arguments}){PrintColors.ENDC}")
-            result = mcp_client.call_tool(tool_name, arguments)
+            result = agent.call_tool(tool_name, arguments)
             truncated = len(result) > 200
             body = result[:200] + "..." if truncated else result
             preview = f"**START TOOL PREVIEW**\n\n{body}\n\n**END TOOL PREVIEW**\n\n"
@@ -542,27 +560,27 @@ def handle_chat(args: list) -> None:
     history: list = []
 
     try:
- 
+
         while True:
             try:
                 user_input = input(f"\n{PrintColors.OKGREEN}You: {PrintColors.ENDC}").strip()
             except (EOFError, KeyboardInterrupt):
                 print("\n[OK] Chat ended")
                 return
- 
+
             if not user_input:
                 continue
- 
+
             if user_input.lower() in ("exit", "quit"):
                 print("[OK] Chat ended")
                 return
- 
+
             if user_input.startswith("/"):
                 _handle_chat_slash_command(user_input, ctx, history, tools_enabled, ollama_tools)
                 continue
- 
+
             history.append(Message("user", user_input))
- 
+
             try:
                 # record=False: we record exactly the new turn ourselves below,
                 # rather than letting the API re-record the whole history list
@@ -572,8 +590,8 @@ def handle_chat(args: list) -> None:
                 active_spinner["spinner"] = spinner
                 try:
                     with spinner:
-                        response = chat_with_model(
-                            model, history, record=False,
+                        response = agent.chat(
+                            history, record=False,
                             tools=ollama_tools if tools_enabled else None,
                             tool_executor=tool_executor if tools_enabled else None,
                         )
@@ -590,7 +608,7 @@ def handle_chat(args: list) -> None:
                 print(f"[X] Unexpected error: {e}")
                 history.pop()
                 continue
- 
+
             # Tool-call turns the loop already resolved (assistant request +
             # tool result pairs) - fold into history so the next turn's
             # context includes them, and record them the same way the API's
@@ -605,17 +623,16 @@ def handle_chat(args: list) -> None:
                         metadata["tool_name"] = trace_message.tool_name
                     ctx.update_ai_memory(trace_message.role, trace_message.content,
                                           metadata=metadata)
- 
+
             history.append(Message(response.message.role, response.message.content))
             print(f"\n{PrintColors.OKBLUE}{model}: {PrintColors.ENDC}{response.content}\n")
- 
+
             if ctx is not None:
                 ctx.update_ai_memory("user", user_input)
                 ctx.update_ai_memory(response.message.role, response.message.content,
                                       metadata={"model": model})
     finally:
-        if mcp_client is not None:
-            mcp_client.close()
+        agent.close_tools()
  
  
 def _handle_chat_slash_command(command: str, ctx, history: list,

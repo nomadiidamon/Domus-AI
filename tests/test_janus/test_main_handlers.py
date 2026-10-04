@@ -314,7 +314,7 @@ class TestHandleChat:
     def test_exit_keyword_ends_chat_without_calling_model(self):
         with patch("Janus.main.start_ollama"), \
              patch("builtins.input", side_effect=["exit"]), \
-             patch("Janus.main.chat_with_model") as mock_chat:
+             patch("Lares.agent.faber_chat") as mock_chat:
             main.handle_chat(["mercury"])
         mock_chat.assert_not_called()
  
@@ -323,10 +323,11 @@ class TestHandleChat:
         mock_response.content = "Hi! How can I help?"
         mock_response.message.role = "assistant"
         mock_response.message.content = "Hi! How can I help?"
+        mock_response.tool_trace = []
  
         with patch("Janus.main.start_ollama"), \
              patch("builtins.input", side_effect=["hello", "quit"]), \
-             patch("Janus.main.chat_with_model", return_value=mock_response) as mock_chat:
+             patch("Lares.agent.faber_chat", return_value=mock_response) as mock_chat:
             main.handle_chat(["mercury"])
  
         mock_chat.assert_called_once()
@@ -345,7 +346,7 @@ class TestHandleChat:
     def test_blank_input_is_skipped(self):
         with patch("Janus.main.start_ollama"), \
              patch("builtins.input", side_effect=["   ", "quit"]), \
-             patch("Janus.main.chat_with_model") as mock_chat:
+             patch("Lares.agent.faber_chat") as mock_chat:
             main.handle_chat(["mercury"])
         mock_chat.assert_not_called()
  
@@ -354,7 +355,7 @@ class TestHandleChat:
         from history, and keep the loop going rather than crashing."""
         with patch("Janus.main.start_ollama"), \
              patch("builtins.input", side_effect=["hello", "quit"]), \
-             patch("Janus.main.chat_with_model", side_effect=RuntimeError("boom")) as mock_chat:
+             patch("Lares.agent.faber_chat", side_effect=RuntimeError("boom")) as mock_chat:
             main.handle_chat(["mercury"])
         mock_chat.assert_called_once()
 
@@ -392,7 +393,7 @@ class TestHandleChat:
  
         with patch("Janus.main.start_ollama"), \
              patch("Janus.main._get_context", return_value=fake_ctx), \
-             patch("Janus.main.chat_with_model", side_effect=fake_chat), \
+             patch("Lares.agent.faber_chat", side_effect=fake_chat), \
              patch("builtins.input", side_effect=["hi", "again", "quit"]):
             main.handle_chat(["mercury"])
  
@@ -408,11 +409,12 @@ class TestHandleChat:
         mock_response.content = "hi"
         mock_response.message.role = "assistant"
         mock_response.message.content = "hi"
+        mock_response.tool_trace = []
         fake_ctx = MagicMock()
  
         with patch("Janus.main.start_ollama"), \
              patch("Janus.main._get_context", return_value=fake_ctx), \
-             patch("Janus.main.chat_with_model", return_value=mock_response), \
+             patch("Lares.agent.faber_chat", return_value=mock_response), \
              patch("builtins.input", side_effect=["hello", "quit"]):
             main.handle_chat(["mercury"])
  
@@ -423,7 +425,7 @@ class TestHandleChat:
         fake_ctx = MagicMock()
         with patch("Janus.main.start_ollama"), \
              patch("Janus.main._get_context", return_value=fake_ctx), \
-             patch("Janus.main.chat_with_model", side_effect=RuntimeError("boom")), \
+             patch("Lares.agent.faber_chat", side_effect=RuntimeError("boom")), \
              patch("builtins.input", side_effect=["hello", "quit"]):
             main.handle_chat(["mercury"])
         fake_ctx.update_ai_memory.assert_not_called()
@@ -647,62 +649,82 @@ class TestSetupFilesystemTools:
 
 
 class TestHandleChatWithMCPTools:
-    """handle_chat's wiring of MCP tools into the chat loop: tools are
-    passed to chat_with_model, tool calls are executed and printed, the
-    trace is folded into history/memory, and the client is always closed
-    on exit - success, error, or interrupt."""
+    """handle_chat's wiring of MCP tools into the chat loop, now via
+    Lares.agent.Agent: tools come from agent.setup_tools(), chat turns go
+    through agent.chat(), tool calls are routed through agent.call_tool()
+    and printed, the trace is folded into history/memory, and
+    agent.close_tools() always runs on exit - success, error, or
+    interrupt. Agent itself (setup_tools/chat/call_tool's own logic) is
+    covered in tests/test_lares/test_agent.py - these tests are only
+    about what handle_chat does with an Agent, so Agent is replaced
+    wholesale with a MagicMock here rather than exercised for real."""
 
     def _tools(self):
         return [{"type": "function", "function": {"name": "read_file", "description": "read"}}]
 
+    def _fake_agent(self, setup_tools_return=(None, None), chat_return=None,
+                     call_tool_return="42"):
+        agent = MagicMock()
+        agent.setup_tools.return_value = setup_tools_return
+        agent.permitted_tool_names.side_effect = (
+            lambda tools: {t["function"]["name"] for t in tools} if tools else set()
+        )
+        agent.call_tool.return_value = call_tool_return
+        if chat_return is not None:
+            agent.chat.return_value = chat_return
+        return agent
+
     def test_no_tools_flag_skips_setup_entirely(self):
+        fake_agent = self._fake_agent()
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main._setup_filesystem_tools") as mock_setup, \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("builtins.input", side_effect=["quit"]):
             main.handle_chat(["mercury", "--no-tools"])
-        mock_setup.assert_not_called()
+        fake_agent.setup_tools.assert_not_called()
 
     def test_tools_setup_called_when_not_disabled(self):
+        fake_agent = self._fake_agent(setup_tools_return=([], None))
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main._setup_filesystem_tools", return_value=(None, None)) as mock_setup, \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("builtins.input", side_effect=["quit"]):
             main.handle_chat(["mercury"])
-        mock_setup.assert_called_once_with("mercury")
+        fake_agent.setup_tools.assert_called_once_with()
 
     def test_banner_printed_when_tools_enabled(self, capsys):
-        fake_client = MagicMock()
+        fake_agent = self._fake_agent(setup_tools_return=([MagicMock()], self._tools()))
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main._setup_filesystem_tools",
-                   return_value=(fake_client, self._tools())), \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("builtins.input", side_effect=["quit"]):
             main.handle_chat(["mercury"])
         out = _strip_ansi(capsys.readouterr().out)
         assert "filesystem tools available: read_file" in out
 
     def test_no_banner_when_tools_unavailable(self, capsys):
+        fake_agent = self._fake_agent(setup_tools_return=([], None))
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main._setup_filesystem_tools", return_value=(None, None)), \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("builtins.input", side_effect=["quit"]):
             main.handle_chat(["mercury"])
         assert "filesystem tools available" not in capsys.readouterr().out
 
-    def test_tools_and_executor_passed_to_chat_with_model(self):
-        fake_client = MagicMock()
+    def test_tools_and_executor_passed_to_agent_chat(self):
         tools = self._tools()
         mock_response = MagicMock()
         mock_response.content = "ok"
         mock_response.message.role = "assistant"
         mock_response.message.content = "ok"
         mock_response.tool_trace = []
+        fake_agent = self._fake_agent(
+            setup_tools_return=([MagicMock()], tools), chat_return=mock_response,
+        )
 
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, tools)), \
-             patch("Janus.main.chat_with_model", return_value=mock_response) as mock_chat, \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("builtins.input", side_effect=["hi", "quit"]):
             main.handle_chat(["mercury"])
 
-        assert mock_chat.call_args.kwargs.get("tools") is tools
-        assert callable(mock_chat.call_args.kwargs.get("tool_executor"))
+        assert fake_agent.chat.call_args.kwargs.get("tools") is tools
+        assert callable(fake_agent.chat.call_args.kwargs.get("tool_executor"))
 
     def test_no_tools_kwarg_passed_when_disabled_via_flag(self):
         mock_response = MagicMock()
@@ -710,21 +732,23 @@ class TestHandleChatWithMCPTools:
         mock_response.message.role = "assistant"
         mock_response.message.content = "ok"
         mock_response.tool_trace = []
+        fake_agent = self._fake_agent(chat_return=mock_response)
 
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main.chat_with_model", return_value=mock_response) as mock_chat, \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("builtins.input", side_effect=["hi", "quit"]):
             main.handle_chat(["mercury", "--no-tools"])
 
-        assert mock_chat.call_args.kwargs.get("tools") is None
-        assert mock_chat.call_args.kwargs.get("tool_executor") is None
+        assert fake_agent.chat.call_args.kwargs.get("tools") is None
+        assert fake_agent.chat.call_args.kwargs.get("tool_executor") is None
 
     def test_tool_call_round_trip_prints_and_records(self, capsys):
-        fake_client = MagicMock()
-        fake_client.call_tool.return_value = "42"
         tools = self._tools()
+        fake_agent = self._fake_agent(
+            setup_tools_return=([MagicMock()], tools), call_tool_return="42",
+        )
 
-        def fake_chat_with_model(model, history, record=False, tools=None, tool_executor=None):
+        def fake_agent_chat(history, tools=None, tool_executor=None, record=False, **_kw):
             # Exercise the real executor the way Faber.messaging.chat() would
             result_text = tool_executor("read_file", {"path": "a.txt"})
             assert result_text == "42"
@@ -733,15 +757,15 @@ class TestHandleChatWithMCPTools:
                 Message("assistant", "", tool_calls=[{"function": {"name": "read_file", "arguments": {"path": "a.txt"}}}]),
                 Message("tool", "42", tool_name="read_file"),
             ]
-            resp = ChatResponse(model=model, message=Message("assistant", "The answer is 42."))
+            resp = ChatResponse(model="mercury", message=Message("assistant", "The answer is 42."))
             resp.tool_trace = trace
             return resp
 
+        fake_agent.chat.side_effect = fake_agent_chat
         fake_ctx = MagicMock()
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, tools)), \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("Janus.main._get_context", return_value=fake_ctx), \
-             patch("Janus.main.chat_with_model", side_effect=fake_chat_with_model), \
              patch("builtins.input", side_effect=["what is the answer?", "quit"]):
             main.handle_chat(["mercury"])
 
@@ -749,27 +773,29 @@ class TestHandleChatWithMCPTools:
         assert "[TOOL] read_file(" in out
         assert "42" in out
         assert "The answer is 42." in out
-        fake_client.call_tool.assert_called_once_with("read_file", {"path": "a.txt"})
+        fake_agent.call_tool.assert_called_once_with("read_file", {"path": "a.txt"})
 
     def test_tool_preview_shows_end_marker_even_when_short(self, capsys):
         """A tool result under the 200-char truncation threshold must still
         print **END TOOL PREVIEW** - previously that marker was only ever
         appended on the truncation branch, so short results silently
         dropped it."""
-        fake_client = MagicMock()
-        fake_client.call_tool.return_value = "42"
         tools = self._tools()
+        fake_agent = self._fake_agent(
+            setup_tools_return=([MagicMock()], tools), call_tool_return="42",
+        )
 
-        def fake_chat_with_model(model, history, record=False, tools=None, tool_executor=None):
+        def fake_agent_chat(history, tools=None, tool_executor=None, record=False, **_kw):
             tool_executor("read_file", {"path": "a.txt"})
             from Faber.messaging import Message, ChatResponse
-            resp = ChatResponse(model=model, message=Message("assistant", "done"))
+            resp = ChatResponse(model="mercury", message=Message("assistant", "done"))
             resp.tool_trace = []
             return resp
 
+        fake_agent.chat.side_effect = fake_agent_chat
+
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, tools)), \
-             patch("Janus.main.chat_with_model", side_effect=fake_chat_with_model), \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("builtins.input", side_effect=["hi", "quit"]):
             main.handle_chat(["mercury"])
 
@@ -778,20 +804,23 @@ class TestHandleChatWithMCPTools:
         assert "**END TOOL PREVIEW**" in out
 
     def test_tool_trace_recorded_into_memory(self):
-        fake_client = MagicMock()
-        fake_client.call_tool.return_value = "42"
         tools = self._tools()
+        fake_agent = self._fake_agent(
+            setup_tools_return=([MagicMock()], tools), call_tool_return="42",
+        )
 
-        def fake_chat_with_model(model, history, record=False, tools=None, tool_executor=None):
+        def fake_agent_chat(history, tools=None, tool_executor=None, record=False, **_kw):
             tool_executor("read_file", {"path": "a.txt"})
             from Faber.messaging import Message, ChatResponse
             trace = [
                 Message("assistant", "", tool_calls=[{"function": {"name": "read_file", "arguments": {}}}]),
                 Message("tool", "42", tool_name="read_file"),
             ]
-            resp = ChatResponse(model=model, message=Message("assistant", "done"))
+            resp = ChatResponse(model="mercury", message=Message("assistant", "done"))
             resp.tool_trace = trace
             return resp
+
+        fake_agent.chat.side_effect = fake_agent_chat
 
         recorded = []
         fake_ctx = MagicMock()
@@ -800,55 +829,60 @@ class TestHandleChatWithMCPTools:
         )
 
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, tools)), \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("Janus.main._get_context", return_value=fake_ctx), \
-             patch("Janus.main.chat_with_model", side_effect=fake_chat_with_model), \
              patch("builtins.input", side_effect=["ask something", "quit"]):
             main.handle_chat(["mercury"])
 
         roles_and_names = [(r, m.get("tool_name") if m else None) for r, c, m in recorded]
         assert ("tool", "read_file") in roles_and_names
 
-    def test_client_closed_on_normal_exit(self):
-        fake_client = MagicMock()
+    def test_tools_closed_on_normal_exit(self):
+        fake_agent = self._fake_agent(setup_tools_return=([MagicMock()], self._tools()))
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, self._tools())), \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("builtins.input", side_effect=["quit"]):
             main.handle_chat(["mercury"])
-        fake_client.close.assert_called_once()
+        fake_agent.close_tools.assert_called_once()
 
-    def test_client_closed_on_eof(self):
-        fake_client = MagicMock()
+    def test_tools_closed_on_eof(self):
+        fake_agent = self._fake_agent(setup_tools_return=([MagicMock()], self._tools()))
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, self._tools())), \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("builtins.input", side_effect=EOFError):
             main.handle_chat(["mercury"])
-        fake_client.close.assert_called_once()
+        fake_agent.close_tools.assert_called_once()
 
-    def test_client_closed_on_keyboard_interrupt(self):
-        fake_client = MagicMock()
+    def test_tools_closed_on_keyboard_interrupt(self):
+        fake_agent = self._fake_agent(setup_tools_return=([MagicMock()], self._tools()))
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, self._tools())), \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("builtins.input", side_effect=KeyboardInterrupt):
             main.handle_chat(["mercury"])
-        fake_client.close.assert_called_once()
+        fake_agent.close_tools.assert_called_once()
 
-    def test_client_closed_when_chat_with_model_raises(self):
-        fake_client = MagicMock()
+    def test_tools_closed_when_agent_chat_raises(self):
+        fake_agent = self._fake_agent(setup_tools_return=([MagicMock()], self._tools()))
+        fake_agent.chat.side_effect = RuntimeError("boom")
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main._setup_filesystem_tools", return_value=(fake_client, self._tools())), \
-             patch("Janus.main.chat_with_model", side_effect=RuntimeError("boom")), \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("builtins.input", side_effect=["hi", "quit"]):
             main.handle_chat(["mercury"])
-        fake_client.close.assert_called_once()
+        fake_agent.close_tools.assert_called_once()
 
-    def test_not_closed_when_setup_returned_none(self):
-        """No client was ever created - nothing to close, and closing
-        None must not be attempted."""
+    def test_close_tools_called_even_when_setup_returned_none(self):
+        """No tools were ever set up - close_tools() is still called
+        (it's a no-op on an Agent with nothing launched - see
+        test_lares/test_agent.py's test_close_tools_is_a_noop_when_
+        nothing_was_launched) rather than being conditionally skipped,
+        since handle_chat has no way to know in advance whether
+        close_tools() has anything to do."""
+        fake_agent = self._fake_agent(setup_tools_return=([], None))
         with patch("Janus.main.start_ollama"), \
-             patch("Janus.main._setup_filesystem_tools", return_value=(None, None)), \
+             patch("Lares.agent.Agent", return_value=fake_agent), \
              patch("builtins.input", side_effect=["quit"]):
-            main.handle_chat(["mercury"])  # would raise if None.close() were attempted
+            main.handle_chat(["mercury"])
+        fake_agent.close_tools.assert_called_once()
  
  
 class TestHandleHistory:
