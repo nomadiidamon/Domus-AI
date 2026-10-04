@@ -333,7 +333,6 @@ class _Spinner:
     """
 
     _FRAMES = ["[=    ]", "[==   ]", "[===  ]", "[==== ]", "[=====]", "[ ====]", "[  ===]", "[   ==]", "[    =]"]
-
     def __init__(self, message: str = "thinking", interval: float = 0.08,
                  color: str = "", endc: str = ""):
         self._message = message
@@ -582,16 +581,16 @@ def handle_chat(args: list) -> None:
             history.append(Message("user", user_input))
 
             try:
-                # record=False: we record exactly the new turn ourselves below,
-                # rather than letting the API re-record the whole history list
-                # (which grows every turn) and duplicate every earlier message.
+                # Agent.chat() never lets Faber record (see its docstring) -
+                # we record exactly the new turn ourselves below, rather
+                # than duplicating every earlier message in history.
                 spinner = _Spinner(f"{model} is thinking",
                                     color=PrintColors.OKCYAN, endc=PrintColors.ENDC)
                 active_spinner["spinner"] = spinner
                 try:
                     with spinner:
                         response = agent.chat(
-                            history, record=False,
+                            history,
                             tools=ollama_tools if tools_enabled else None,
                             tool_executor=tool_executor if tools_enabled else None,
                         )

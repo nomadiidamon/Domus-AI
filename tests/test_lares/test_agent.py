@@ -15,6 +15,7 @@ import pytest
 
 from Faber.messaging import ChatResponse, Message
 from Lares.agent import Agent
+from Lares.permissions import AgentPermissions
 from Lares.profiles import AgentProfile
 
 pytestmark = pytest.mark.lares
@@ -22,9 +23,22 @@ pytestmark = pytest.mark.lares
 
 def _agent(model, manager, **profile_kwargs):
     profile = AgentProfile(name=model, **profile_kwargs)
-    agent = Agent(model, profile=profile)
-    agent.permissions._manager = manager
-    return agent
+    permissions = AgentPermissions(model, profile, manager=manager)
+    return Agent(model, profile=profile, permissions=permissions)
+
+
+class TestAgentConstruction:
+    def test_default_permissions_use_registered_profile(self):
+        agent = Agent("Mercury")
+        assert agent.profile.name == "Mercury"
+        assert agent.permissions.profile is agent.profile
+
+    def test_injected_permissions_override_the_default(self, manager):
+        profile = AgentProfile(name="ToolModel", supports_tool_calls=True)
+        permissions = AgentPermissions("ToolModel", profile, manager=manager)
+        agent = Agent("ToolModel", profile=profile, permissions=permissions)
+        assert agent.permissions is permissions
+        assert agent.permissions.manager is manager
 
 
 class TestSetupToolsPermissionGating:
@@ -137,6 +151,23 @@ class TestAgentChatBasic:
         _, kwargs = mock_chat.call_args
         assert kwargs["tools"] is None
         assert kwargs["tool_executor"] is None
+
+    def test_always_calls_faber_chat_with_record_false(self, manager):
+        """Agent.chat must never let Faber record - see its docstring for
+        why a retry with record=True would double-record every earlier
+        message in history, not just redundantly re-record it once."""
+        agent = _agent("ToolModel", manager, supports_tool_calls=False)
+        expected = ChatResponse(model="ToolModel", message=Message("assistant", "hi"))
+
+        with patch("Lares.agent.faber_chat", return_value=expected) as mock_chat:
+            agent.chat([Message("user", "hello")])
+
+        assert mock_chat.call_args.kwargs["record"] is False
+
+    def test_rejects_an_explicit_record_kwarg(self, manager):
+        agent = _agent("ToolModel", manager, supports_tool_calls=False)
+        with pytest.raises(TypeError, match="record"):
+            agent.chat([Message("user", "hello")], record=True)
 
     def test_tools_withheld_when_permissions_disallow_even_if_passed(self, manager):
         """A caller might still pass a tools= list, but Agent.chat must

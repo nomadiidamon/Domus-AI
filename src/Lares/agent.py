@@ -58,12 +58,17 @@ class Agent:
                mcp/profiles/<Model>.json).
         profile: Override the registered AgentProfile (mainly for
                  tests). Defaults to Lares.profiles.get_profile(model).
+        permissions: Override the AgentPermissions this agent uses
+                     (mainly for tests, or for a caller that needs a
+                     non-default MCPManager/mcp_dir). Defaults to a
+                     fresh AgentPermissions(model, profile).
     """
 
-    def __init__(self, model: str, profile: Optional[AgentProfile] = None):
+    def __init__(self, model: str, profile: Optional[AgentProfile] = None,
+                 permissions: Optional[AgentPermissions] = None):
         self.model = model
         self.profile = profile or get_profile(model)
-        self.permissions = AgentPermissions(self.model, self.profile)
+        self.permissions = permissions or AgentPermissions(self.model, self.profile)
         self._mcp_clients: List[MCPClient] = []
         # Which client owns a given (live) tool name, so call_tool() can
         # route without the caller (e.g. Janus.main) needing to know
@@ -149,7 +154,7 @@ class Agent:
         need to know which server backs which tool - there's exactly one
         client today (filesystem), but this keeps that an implementation
         detail rather than something every caller has to track.
- 
+
         Raises KeyError if tool_name isn't one setup_tools() actually
         advertised - callers should already be checking
         permitted_tool_names()/the model's own allowlist before calling
@@ -182,7 +187,6 @@ class Agent:
         *,
         tools: Optional[List[dict]] = None,
         tool_executor=None,
-        record: bool = True,
         **kwargs,
     ) -> ChatResponse:
         """
@@ -190,6 +194,23 @@ class Agent:
         (Lares.response_policy) - retrying once if the reply looks empty
         or looks like it ignored a tool result it just received, per
         this agent's profile.
+
+        Recording into Mentis AIMemory is always the caller's job, never
+        Faber.messaging's own record=True path - this method always
+        calls faber_chat(record=False) internally, on both the initial
+        attempt and any retry. This isn't just a style preference: a
+        retry calls faber_chat a second time with a *longer* history
+        (the original messages plus the rejected reply plus the nudge -
+        see retried_history below), and record=True records every
+        message passed in, not just the new turn. Letting Faber record
+        would mean every message from the first attempt gets written to
+        AIMemory twice - once from the initial call, again from the
+        retry - exactly the duplicate-recording bug
+        Janus.main.handle_chat's own record=False already works around
+        for its normal (non-retried) turns. A record=True kwarg isn't
+        accepted here at all, rather than accepted and overridden, so
+        this can't be quietly reintroduced by a future caller passing
+        record=True through **kwargs.
 
         `history` is mutated-by-convention the same way
         Janus.main.handle_chat already treats it: this method appends
@@ -208,11 +229,19 @@ class Agent:
         turn (e.g. --no-tools), the same way Janus.main does; this
         method does not second-guess an explicit tools=None.
         """
+        if "record" in kwargs:
+            raise TypeError(
+                "Agent.chat() does not accept record= - recording is always "
+                "the caller's responsibility, never Faber's own record=True "
+                "path (see this method's docstring for why a retry makes "
+                "record=True actively harmful here, not just redundant)."
+            )
+
         effective_tools = tools if (tools and self.permissions.tools_allowed()) else None
         effective_executor = tool_executor if effective_tools else None
 
         response = faber_chat(
-            self.model, history, record=record,
+            self.model, history, record=False,
             tools=effective_tools, tool_executor=effective_executor,
             **kwargs,
         )
@@ -220,7 +249,7 @@ class Agent:
         def _retry(nudge: Message) -> ChatResponse:
             retried_history = list(history) + [response.message, nudge]
             return faber_chat(
-                self.model, retried_history, record=record,
+                self.model, retried_history, record=False,
                 tools=effective_tools, tool_executor=effective_executor,
                 **kwargs,
             )
