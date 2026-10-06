@@ -17,6 +17,8 @@ Approval is resolved in this order:
      /dev/tty (falling back to stdin when there is no controlling
      terminal, e.g. unit tests driving the server in-process).
   3. Anything else - denial. Failure to even ask (no TTY, EOF) denies.
+
+@todo Create a confirmation object that can handle the pre-approval check, interactive prompt, and denial logic in a unified cross-platform manner.
 """
 
 import logging
