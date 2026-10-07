@@ -12,21 +12,60 @@ Relies on DependencyChecker, PythonPackageDependency, and
 SystemCommandDependency from dependencies.py -- no duplicate logic here.
 """
 
+from __future__ import annotations
+
 import sys
 import logging
 import platform
 import subprocess
+import importlib.util
 from pathlib import Path
-from typing import Tuple
+from typing import TYPE_CHECKING, Tuple
 
-from .dependencies import (
-    DependencyChecker,
-    DependencyStatus,
-    PythonPackageDependency,
-    SystemCommandDependency,
-)
+# Handle imports for both package and direct module loading.
+# When loaded directly via importlib (from install.py), relative imports fail.
+try:
+    from .dependencies import (
+        DependencyChecker,
+        DependencyStatus,
+        PythonPackageDependency,
+        SystemCommandDependency,
+    )
+except ImportError:
+    # When loaded directly via importlib, load dependencies.py directly
+    # to avoid triggering Janus/__init__.py which imports config.py
+    # (which requires dotenv, not yet installed).
+    _janus_dir = Path(__file__).parent
+    _deps_path = _janus_dir / "dependencies.py"
+    _spec = importlib.util.spec_from_file_location("dependencies", _deps_path)
+    _deps_module = importlib.util.module_from_spec(_spec)
+    sys.modules["dependencies"] = _deps_module
+    _spec.loader.exec_module(_deps_module)
+    
+    DependencyChecker = _deps_module.DependencyChecker  # type: ignore[assignment]
+    DependencyStatus = _deps_module.DependencyStatus  # type: ignore[assignment]
+    PythonPackageDependency = _deps_module.PythonPackageDependency  # type: ignore[assignment]
+    SystemCommandDependency = _deps_module.SystemCommandDependency  # type: ignore[assignment]
+
+if TYPE_CHECKING:
+    try:
+        from .dependencies import (
+            DependencyChecker,
+            DependencyStatus,
+            PythonPackageDependency,
+            SystemCommandDependency,
+        )
+    except ImportError:
+        # Fallback for type checking when relative imports fail
+        from Janus.dependencies import (  # type: ignore[no-redef]
+            DependencyChecker,
+            DependencyStatus,
+            PythonPackageDependency,
+            SystemCommandDependency,
+        )
 
 logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Manual install URLs - shown when auto-repair is not possible
@@ -43,7 +82,7 @@ INSTALL_URLS = {
 # ---------------------------------------------------------------------------
 # Dependency registry
 # ---------------------------------------------------------------------------
-def _build_checker() -> DependencyChecker:
+def _build_checker() -> DependencyChecker:  # type: ignore[type-arg]
     """
     Register all dependencies the runtime needs.
 
@@ -81,17 +120,10 @@ def _build_checker() -> DependencyChecker:
         PythonPackageDependency(
             "nvidia-ml-py",
             import_name="pynvml",
-            min_version="7.352.0",
+            min_version="12.0.0",
             required=True,
             description="NVIDIA GPU monitoring",
         ),
-        # Will remove in production
-        #PythonPackageDependency(
-        #    "pytest",
-        #    min_version="7.0.0",
-        #    required=True,
-        #    description="Testing framework",
-        #),
 
         # System commands
         SystemCommandDependency(
@@ -169,7 +201,7 @@ def check_and_repair(auto_repair: bool = True) -> Tuple[bool, dict]:
 
     return all_required_ok, results
 
-def _print_check_results(checker: DependencyChecker, results: dict) -> None:
+def _print_check_results(checker: DependencyChecker, results: dict) -> None:  # type: ignore[type-arg]
     """Print a formatted dependency check table."""
     for name, result in results.items():
         dep = checker.dependencies[name]
@@ -188,7 +220,7 @@ def _print_check_results(checker: DependencyChecker, results: dict) -> None:
             if name in INSTALL_URLS:
                 print(f"     -> {INSTALL_URLS[name]}")
 
-def _all_required_satisfied(checker: DependencyChecker, results: dict) -> bool:
+def _all_required_satisfied(checker: DependencyChecker, results: dict) -> bool:  # type: ignore[type-arg]
     """Return True only if every required dependency is healthy."""
     for name, result in results.items():
         dep = checker.dependencies[name]
