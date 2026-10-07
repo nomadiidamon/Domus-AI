@@ -99,41 +99,41 @@ The optional per-platform scripts below are only needed if you want the repo's o
 
 - **Linux**: `./scripts/Linux/Add-DomusToPath.sh` (appends to `~/.bashrc`)
 - **macOS**: `./scripts/MacOS/Add-DomusToPath.sh` (appends to `~/.zshrc`)
-- **Windows**: `scripts\Windows\bat\Add-DomusToPath.bat` (adds to the user PATH in the registry; open a new terminal afterward)
+- **Windows**: `scripts\Windows\Add-DomusToPath.bat` (adds to the user PATH in the registry; open a new terminal afterward)
 
 **If the repo is moved or removed:** the PATH entry points at the repo's location at install time. After moving the repo, run `Remove-DomusFromPath` then `Add-DomusToPath` from the new location (each platform has both scripts alongside `Add-DomusToPath`). If the repo is deleted, the pip-installed `janus` command stops working too - reinstall with `pip uninstall domus-ai` to clean up. The PATH entry itself is inert if the directory no longer exists (the shell just skips it), but `Remove-DomusFromPath` will tidy it up.
 
-The launcher scripts themselves live at [scripts/Linux/Janus.sh](scripts/Linux/Janus.sh), [scripts/MacOS/Janus.sh](scripts/MacOS/Janus.sh), and [scripts/Windows/bat/Janus.bat](scripts/Windows/bat/Janus.bat).
+The launcher scripts themselves live at [scripts/Linux/Janus.sh](scripts/Linux/Janus.sh), [scripts/MacOS/Janus.sh](scripts/MacOS/Janus.sh), and [scripts/Windows/Janus.bat](scripts/Windows/Janus.bat).
 
 The platform-specific wrappers below are an alternative to the generic commands above - one script per operation per platform.
 
 ---
 
 ### Windows
-Convenience `.bat` wrappers are provided under [scripts/Windows/bat](scripts/Windows/bat), calling the Python API directly (no PowerShell except for the PATH registry scripts, where `setx` would corrupt existing PATH entries):
+Convenience `.bat` wrappers are provided under [scripts/Windows](scripts/Windows), calling the Python API directly (no PowerShell except for the PATH registry scripts, where `setx` would corrupt existing PATH entries):
 
 - **Start a model** (per-model wrappers delegate to the generic one):
   ```bat
-  scripts\Windows\bat\Start-AI-Mercury.bat
-  scripts\Windows\bat\Start-AI.bat vulcan
+  scripts\Windows\Start-AI-Mercury.bat
+  scripts\Windows\Start-AI.bat vulcan
   ```
 - **Build a model** from its Modelfile (see [bundled Modelfiles](src/DomusData/Modelfiles)):
   ```bat
-  scripts\Windows\bat\Build-AI.bat mercury
+  scripts\Windows\Build-AI.bat mercury
   ```
 - **Check status** of running models:
   ```bat
-  scripts\Windows\bat\Status-AI.bat
+  scripts\Windows\Status-AI.bat
   ```
 - **Stop** running models:
   ```bat
-  scripts\Windows\bat\Stop-AI.bat
+  scripts\Windows\Stop-AI.bat
   ```
 - **Pull / list / remove** models:
   ```bat
-  scripts\Windows\bat\Pull-AI.bat qwen2.5:0.5b
-  scripts\Windows\bat\List-AI.bat
-  scripts\Windows\bat\Remove-AI.bat mercury
+  scripts\Windows\Pull-AI.bat qwen2.5:0.5b
+  scripts\Windows\List-AI.bat
+  scripts\Windows\Remove-AI.bat mercury
   ```
 
 ### macOS and Linux
@@ -175,9 +175,9 @@ python scripts/run_tests.py -m janus -v
 ### Platform wrapper scripts
 Each platform also has a wrapper that calls `scripts/run_tests.py` for you, matching the per-platform layout used for the runtime scripts:
 
-- **Windows**: [scripts/Windows/bat/Run-Tests.bat](scripts/Windows/bat/Run-Tests.bat)
+- **Windows**: [scripts/Windows/Run-Tests.bat](scripts/Windows/Run-Tests.bat)
   ```bat
-  scripts\Windows\bat\Run-Tests.bat
+  scripts\Windows\Run-Tests.bat
   ```
 - **macOS**: [scripts/MacOS/Run-Tests.sh](scripts/MacOS/Run-Tests.sh)
   ```bash

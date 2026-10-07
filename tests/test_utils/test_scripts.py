@@ -21,7 +21,7 @@ SCRIPTS = REPO_ROOT / "scripts"
 
 pytestmark = pytest.mark.utils
 
-WINDOWS_BAT = SCRIPTS / "Windows" / "bat"
+WINDOWS_BAT = SCRIPTS / "Windows"
 LINUX = SCRIPTS / "Linux"
 MACOS = SCRIPTS / "MacOS"
 

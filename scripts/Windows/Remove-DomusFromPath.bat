@@ -1,5 +1,5 @@
 @echo off
-REM Removes the Domus-AI scripts\Windows\bat directory from the user PATH.
+REM Removes the Domus-AI scripts\Windows directory from the user PATH.
 setlocal
 set "TARGET=%~dp0"
 set "TARGET=%TARGET:~0,-1%"
