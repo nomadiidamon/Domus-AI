@@ -53,25 +53,10 @@ class TestHardwareProfileToDict:
         assert data["primary_accelerator"] == "nvidia_cuda"
         assert isinstance(data["gpus"], list)
 
-    @pytest.mark.xfail(
-        reason="known bug: HardwareProfile.to_dict() converts the top-level "
-               "primary_accelerator enum to .value but not each GPUInfo's "
-               "own .accelerator enum, so the per-GPU field stays an "
-               "AcceleratorType instance instead of a string. Fix in "
-               "hardware.py's to_dict(), not here.",
-        strict=True,
-    )
     def test_to_dict_serializes_per_gpu_accelerator_to_string(self, nvidia_profile):
         data = nvidia_profile.to_dict()
         assert data["gpus"][0]["accelerator"] == "nvidia_cuda"
 
-    @pytest.mark.xfail(
-        reason="known bug: per-GPU accelerator enum isn't converted by "
-               "to_dict(), so the resulting dict isn't actually "
-               "JSON-serializable despite the docstring's promise. See "
-               "test_to_dict_serializes_per_gpu_accelerator_to_string.",
-        strict=True,
-    )
     def test_to_dict_is_json_serializable(self, nvidia_profile):
         data = nvidia_profile.to_dict()
         json.dumps(data)  # must not raise
@@ -342,14 +327,6 @@ class TestGetSystemSummary:
         assert isinstance(summary["hardware"], dict)
         assert isinstance(summary["recommendation"], dict)
 
-    @pytest.mark.xfail(
-        reason="known bug: ModelRecommendation.model_size (a ModelSize "
-               "enum) is never converted to its .value before being "
-               "returned from get_system_summary(), the same class of bug "
-               "as HardwareProfile.to_dict()'s per-GPU accelerator field. "
-               "Fix in hardware.py, not here.",
-        strict=True,
-    )
     def test_summary_is_json_serializable(self):
         summary = get_system_summary()
         json.dumps(summary)  # must not raise

@@ -68,7 +68,10 @@ class HardwareProfile:
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         data = asdict(self)
-        data['gpus'] = [asdict(gpu) for gpu in self.gpus]
+        data['gpus'] = [
+            {**asdict(gpu), 'accelerator': gpu.accelerator.value}
+            for gpu in self.gpus
+        ]
         data['primary_accelerator'] = self.primary_accelerator.value
         return data
 
@@ -674,9 +677,14 @@ def get_system_summary() -> Dict[str, any]:
     profile = detect_hardware()
     recommendation = recommend_model(profile)
     
+    rec_dict = None
+    if recommendation:
+        rec_dict = asdict(recommendation)
+        rec_dict['model_size'] = recommendation.model_size.value
+    
     return {
         'hardware': profile.to_dict(),
-        'recommendation': asdict(recommendation) if recommendation else None,
+        'recommendation': rec_dict,
     }
 
 
