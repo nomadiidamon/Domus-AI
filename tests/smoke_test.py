@@ -93,12 +93,10 @@ def check_paths_resolve():
     initialize_host() to have been called first - that's a separate,
     stateful flow we don't exercise in a stateless smoke test.
     """
-    from Janus.paths import find_root
-    root = find_root()
-    assert root.exists(), f"root does not exist: {root}"
-    config_dir = root / "config"
-    assert config_dir.exists(), f"repo config dir does not exist: {config_dir}"
-    return f"root={root}, config={config_dir}"
+    from Janus.paths import get_config_path
+    config_dir = get_config_path()
+    assert config_dir.exists(), f"packaged config dir does not exist: {config_dir}"
+    return f"config={config_dir}"
 
 
 def check_config_loads():
@@ -169,7 +167,7 @@ def check_utils_module():
     assert missing == {"x": 1}, f"expected default for missing file, got {missing}"
 
     # load_json: real file parses correctly
-    real = utils.load_json(PROJECT_ROOT / "config" / "models.json", default=None)
+    real = utils.load_json(PROJECT_ROOT / "src" / "DomusData" / "config" / "models.json", default=None)
     assert real is not None and isinstance(real, dict), "expected config/models.json to parse"
 
     return "configure_logging + load_json both work as expected"

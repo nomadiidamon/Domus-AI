@@ -8,7 +8,8 @@ test, so each test here can assume load_*_config() will actually hit
 disk rather than returning a stale cached value from import time or a
 previous test.
 
-_get_config_dir() resolves via Janus.paths.find_root() when possible, so
+_get_config_dir() resolves via Janus.paths.get_config_path(), which honors
+LOCAL_AI_RUNTIME_ROOT before falling back to the packaged DomusData/config, so
 these tests point LOCAL_AI_RUNTIME_ROOT at a disposable directory with
 its own config/*.json files rather than touching the real repo's config/.
 """
@@ -31,7 +32,7 @@ def fake_config_root(isolated_runtime_root):
 
 
 class TestGetConfigDir:
-    def test_resolves_via_find_root(self, isolated_runtime_root):
+    def test_resolves_via_env_override(self, isolated_runtime_root):
         (isolated_runtime_root / "config").mkdir()
         result = config._get_config_dir()
         assert result == isolated_runtime_root / "config"

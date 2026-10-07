@@ -194,6 +194,7 @@ class TestEventTypeCoverage:
         for name in (
             "MESSAGE_SENT", "MESSAGE_RECEIVED",
             "CONVERSATION_CONDENSED", "MEMORY_STORED", "USER_MEMORY_UPDATED",
+            "INFERENCE_RUN", "STATE_CHANGED",
         ):
             assert hasattr(EventType, name), f"EventType.{name} missing"
 

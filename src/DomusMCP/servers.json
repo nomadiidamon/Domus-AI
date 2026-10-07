@@ -2,21 +2,21 @@
   "servers": {
     "filesystem": {
       "command": "python",
-      "args": ["-m", "mcp.filesystem"],
+      "args": ["-m", "DomusMCP.filesystem"],
       "env": {},
       "transport": "stdio",
       "description": "Read/write access to project files within the host project root."
     },
     "git": {
       "command": "python",
-      "args": ["-m", "mcp.git"],
+      "args": ["-m", "DomusMCP.git"],
       "env": {},
       "transport": "stdio",
       "description": "Git operations on the host project repository."
     },
     "fetch": {
       "command": "python",
-      "args": ["-m", "mcp.fetch"],
+      "args": ["-m", "DomusMCP.fetch"],
       "env": {},
       "transport": "stdio",
       "description": "Fetch and read web content for research tasks."

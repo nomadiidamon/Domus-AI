@@ -35,11 +35,17 @@ janus = "Janus.main:main"
 # top-level under src/.
 
 [tool.setuptools]
-package-dir = {"" = "src", "mcp" = "mcp"}
+package-dir = {"" = "src"}
 py-modules = ["utils"]
+include-package-data = true
 
 [tool.setuptools.packages]
-find = { where = ["src", "."], include = ["Hestia*", "Janus*", "Mentis*", "Faber*", "Custos*", "Mercurius*", "Lares*", "DomusAPI*", "mcp*"] }
+find = { where = ["src"], include = ["Hestia*", "Janus*", "Mentis*", "Faber*", "Custos*", "Mercurius*", "Lares*", "DomusAPI*", "DomusMCP*", "DomusData*"] }
+
+# Runtime data read through importlib.resources (see Janus.paths).
+[tool.setuptools.package-data]
+DomusData = ["config/*.json", "config/*.env", "Modelfiles/*/Modelfile*"]
+DomusMCP = ["servers.json", "profiles/*.json"]
 
 [tool.pytest.ini_options]
 
@@ -63,6 +69,7 @@ markers = [
     "domusapi: tests for the DomusAPI subsystem (top-level wrapper) - currently a stub package",
     "utils: tests for the shared utils module",
     "e2e: end-to-end tests requiring a live Ollama server (deselect with '-m \"not e2e\"')",
+    "slow: builds a wheel via pip (deselect with '-m \"not slow\"')",
 ]
 
 # Fail loudly on unknown markers.

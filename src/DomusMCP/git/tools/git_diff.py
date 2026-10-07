@@ -1,4 +1,4 @@
-from mcp.git import run_git
+from DomusMCP.git import run_git
 
 TOOL = {
     "name": "git_diff",

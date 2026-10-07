@@ -2,54 +2,45 @@
 
 
 ## Description
-This is meant to serve as tool for harnessing local AI models for development and testing purposes.
+Domus-AI (Home-AI) is meant to serve as tool for harnessing local AI models for development and testing purposes.
 
-It provides a simple interface to run and interact with various AI models locally without relying on external APIs, although there are plans to allow integrations with tools such as Claude Code.
+It provides a simple interface to run and interact with AI models locally without relying on external APIs, and supports launching Claude Code through Ollama. See the [Faber API](src/Faber/FaberAPI_Doc.md) for that integration.
 
-It is designed to be modular, allowing users to easily add support for new models and runtimes as they become available.
+It is designed to be modular, allowing users to easily add support for new models and runtimes as desired.
 
-This project may be used as a package for other projects, or as a standalone tool for local AI model development and testing.
+This project may be used as a package for other projects, or as a standalone tool for local development and testing with AI models.
 
 ----------------------------------------------------
 
 ## Project Structure and Architecture
-The main pieces that comprise Domus-AI are:
-### DomusAPI - Simplified API
-The stable, top-level API for the whole package - a thin wrapper around the subsystems below. Library-safe: no `sys.exit`, no interactive prompts, errors raise and results return. Covers lifecycle (`init`/`shutdown`), hardware detection, model management, messaging (`ask`/`chat`), MCP permissions, and event subscription.
+Subsystem responsibilities, public APIs, usage examples, and implementation status live with each subsystem:
 
-### Hestia - General Runtime
-The hearth of Domus-AI. It is the main subsytem for operating within Domus' local AI environment. It is responsible for Initializing subsytems, dependency injection and exposing a unified API that Domus-API wraps around. It is also the home for hardware and system detection. 
+| Subsystem | Responsibility                                                  | API documentation |
+| --------- | --------------------------------------------------------------- | ----------------- |
+| DomusAPI  | Stable package-level Python API.                                | [DomusAPI API](src/DomusAPI/DomusAPI_Doc.md)        |
+| Hestia    | Hardware detection and model recommendations.                   | [Hestia API](src/Hestia/HestiaAPI_Doc.md)           |
+| Janus     | CLI, configuration, diagnostics, paths, and runtime lifecycle.  | [Janus API](src/Janus/JanusAPI_Doc.md)              |
+| Mercurius | Process-wide event bus.                                         | [Mercurius API](src/Mercurius/MercuriusAPI_Doc.md)  |
+| Custos    | MCP permissions, client, and confirmation boundaries.           | [Custos API](src/Custos/CustosAPI_Doc.md)           |
+| Mentis    | Runtime context and persistent memory.                          | [Mentis API](src/Mentis/MentisAPI_Doc.md)           |
+| Lares     | Model profiles, tool permissions, and agent chat policy.        | [Lares API](src/Lares/LaresAPI_Doc.md)              |
+| Faber     | Model/process actions and Ollama messaging.                     | [Faber API](src/Faber/FaberAPI_Doc.md)              |
 
-### Janus - Runtime State
-The threshold users must cross for runtime capabilities. It is responsible for the runtime state, the CLI, Configuration laoding, other susbsystem lifecycles, startup and shutdown, and component registration.
-
-### Mercurius - Event Bus
-The messenger of the entire environment: a thread-safe, queue-based pub/sub bus with a background dispatch thread. Janus instantiates it at startup and publishes lifecycle events (STARTUP/SHUTDOWN/MODEL_LOADED/MODEL_UNLOADED); Mentis bridges its context events onto it (including MESSAGE_SENT/MESSAGE_RECEIVED and the memory intents CONVERSATION_CONDENSED/MEMORY_STORED/USER_MEMORY_UPDATED); the MCP tool servers publish TOOL_INVOKED/TOOL_RESULT/TOOL_CONFIRMATION_REQUIRED. Subscribers can react to any of these via `Mercurius.get_bus().subscribe(...)` or `DomusAPI.subscribe(...)`.
-
-### Custos - Security and MCP
-The security guard of Domus-AI: permissions, trusts, approvals and sandboxing. Holds the MCPManager, which reads `mcp/servers.json` and `mcp/profiles/<Model>.json` to gate which MCP servers and tools each model may use (`enable`/`get_tools`/`allow_tool`). The local MCP tool servers live under [mcp/](mcp) (filesystem, git, fetch - pure Python, stdio JSON-RPC). Tools that cross the project trust boundary (e.g. `read_external_file`) ask the human running the runtime for approval on the terminal - the model cannot approve itself.
-
-### Mentis - Context and Memory
-The memory and mind of the Domus environment. It is responsible for session management, persistent user and project memories, preferences, and contextual awareness. AIMemory persists conversation history, durable conversation notes, and permanent user memory to disk (surviving restarts), and supports memory intents like condensing conversations, storing notes, and remembering user facts.
-
-### Lares - Agents (Not yet Implemented)
-The spirits of the home (Domus). Is responsible for persistent helpers, personalized agents, specialized agents and general assistants.
-
-### Faber - Actions
-The actions, tools and workflows of the Lares (and of the Janus CLI until Lares exists). Owns process/session management, Ollama server control, model lifecycle (start/stop/pull/build/list/remove), Claude Code launching, and model messaging (`chat`/`generate` over Ollama's HTTP API, with exchanges recorded into Mentis and published to Mercurius).
+The MCP server implementations and their bundled configuration are under [src/DomusMCP](src/DomusMCP).
 
 -----------------------------------------------------
 
 ## Dependencies
 ### Required Dependencies
-- Python: The primary programming language for running the runtime. Developed with python version 3.14.6
+- Python: The primary programming language for running the runtime.
 - Ollama: The primary runtime backend for running local AI models. Ensure you have the latest version installed.
+- Git: Required by the runtime and its Git MCP integration; see the [Custos API](src/Custos/CustosAPI_Doc.md).
 
 ### Required Python Packages
 - psutil: v5.9.0 (or greater) for CPU, RAM, and GPU usage monitoring
 - packaging: v23.0 (or greater) for version comparison in dependency checks
 - python-dotenv: v1.0 (or greater) for .env file support
-- nvidia-ml-py: v12.0.0 (or greater) for GPU monitoring (if using NVIDIA GPUs)
+- nvidia-ml-py: v12.0.0 (or greater), required package dependency and used for NVIDIA GPU monitoring
 
 ### Optional Dependencies
 - Claude Code: For Claude models, or direct integration with Claude Code's CLI if desired.
@@ -80,47 +71,29 @@ Use `--check-only` (or `--no-repair`) to only report on dependency status withou
 python install.py --check-only
 ```
 
-### 3b. Install the package itself (editable)
-To make `python -m Janus ...` and `from Hestia import ...` work from any directory, install the package in editable mode so it always reflects your working tree:
+### 3b. Install the package itself
+Installing the package makes the `janus` command, `python -m Janus`, and the Python subsystem packages available from any directory. See the [Janus API](src/Janus/JanusAPI_Doc.md) for CLI usage and the subsystem API docs above for Python usage. Config, Modelfiles, and MCP server definitions ship inside the package (`DomusData`, `DomusMCP`), so no repo checkout is needed at runtime.
+
+**General usage (non-editable):**
 ```bash
-python -m pip install -e .
+python -m pip install .
 ```
-Editable install is important: a plain `pip install .` copies the code into site-packages, and subsequent edits in `src/` would silently not apply. If you ever see errors like `Could not find config directory` right after pulling or reinstalling, rerun the editable install command above.
+This copies the package into site-packages. Re-run it after pulling changes to pick them up.
+
+**Development (editable, with test dependencies):**
+```bash
+python -m pip install -e ".[dev]"
+```
+Editable mode always reflects your working tree in `src/`, and `[dev]` adds `pytest`. Use this if you plan to modify the code or run the tests.
 
 ### 4. Verify the setup
-Run the built-in diagnostic command to confirm everything is wired up correctly:
-```bash
-python -m Janus doctor
-```
+See the Janus [diagnostics documentation](src/Janus/JanusAPI_Doc.md#diagnostics) for the built-in setup check.
 
-### 5. Start a model
-Models and their settings are defined in [config/models.json](config/models.json), with Ollama runtime options in [config/ollama.env](config/ollama.env). After `python -m pip install -e .`, the CLI is available three ways: `janus <command>` (pip console script, works anywhere), `python -m Janus <command>`, or `Janus <command>` via the platform shims in [scripts](scripts) (run the matching `Add-DomusToPath` script first - see below).
-
-```bash
-# Start a model (starts the Ollama server first if it isn't already running)
-janus start mercury
-
-# Check status of running models and hardware
-janus status
-
-# Build / pull / list / remove models
-janus build mercury
-janus pull qwen2.5:0.5b
-janus list
-janus remove mercury
-
-# Stop a specific model, or all models and the Ollama server if no model is given
-janus stop mercury
-janus stop
-
-# Show which MCP tools a model's profile permits
-janus mcp tools Mercury
-```
-
-Run `janus help` at any time for the full list of commands.
+### 5. Use the runtime
+The CLI is available as `janus`, `python -m Janus`, or through the optional platform launchers in [scripts](scripts). See the [Janus API documentation](src/Janus/JanusAPI_Doc.md) for command usage, chat controls, configuration, and host-project behavior. Use the subsystem API docs linked above for library workflows.
 
 ### 5b. Putting `Janus` on your PATH
-After `python -m pip install -e .`, **both** `janus` and `Janus` are already proper commands (pip console scripts in `~/.local/bin` / `%APPDATA%\Scripts`) - they work from any directory with no PATH changes. This is the recommended way to invoke the CLI.
+After installing the package (step 3b), `janus` is already a proper command (a pip console script in `~/.local/bin` / `%APPDATA%\Scripts`) - it works from any directory with no PATH changes. This is the recommended way to invoke the CLI. The pip install does not create a capitalized `Janus` command (Windows is case-insensitive, so it resolves there anyway).
 
 The optional per-platform scripts below are only needed if you want the repo's own `Janus` launcher on PATH instead (e.g. on a machine where the package isn't pip-installed - the launcher falls back to `python -m Janus`). They resolve their own location, so they work no matter where you invoke them from, and are idempotent (safe to re-run):
 
@@ -128,7 +101,7 @@ The optional per-platform scripts below are only needed if you want the repo's o
 - **macOS**: `./scripts/MacOS/Add-DomusToPath.sh` (appends to `~/.zshrc`)
 - **Windows**: `scripts\Windows\bat\Add-DomusToPath.bat` (adds to the user PATH in the registry; open a new terminal afterward)
 
-**If the repo is moved or removed:** the PATH entry points at the repo's location at install time. After moving the repo, run `Remove-DomusFromPath` then `Add-DomusToPath` from the new location (each platform has both scripts alongside `Add-DomusToPath`). If the repo is deleted, the pip-installed `janus`/`Janus` commands stop working too - reinstall with `pip uninstall domus-ai` to clean up. The PATH entry itself is inert if the directory no longer exists (the shell just skips it), but `Remove-DomusFromPath` will tidy it up.
+**If the repo is moved or removed:** the PATH entry points at the repo's location at install time. After moving the repo, run `Remove-DomusFromPath` then `Add-DomusToPath` from the new location (each platform has both scripts alongside `Add-DomusToPath`). If the repo is deleted, the pip-installed `janus` command stops working too - reinstall with `pip uninstall domus-ai` to clean up. The PATH entry itself is inert if the directory no longer exists (the shell just skips it), but `Remove-DomusFromPath` will tidy it up.
 
 The launcher scripts themselves live at [scripts/Linux/Janus.sh](scripts/Linux/Janus.sh), [scripts/MacOS/Janus.sh](scripts/MacOS/Janus.sh), and [scripts/Windows/bat/Janus.bat](scripts/Windows/bat/Janus.bat).
 
@@ -144,7 +117,7 @@ Convenience `.bat` wrappers are provided under [scripts/Windows/bat](scripts/Win
   scripts\Windows\bat\Start-AI-Mercury.bat
   scripts\Windows\bat\Start-AI.bat vulcan
   ```
-- **Build a model** from its Modelfile (see [Modelfiles](Modelfiles)):
+- **Build a model** from its Modelfile (see [bundled Modelfiles](src/DomusData/Modelfiles)):
   ```bat
   scripts\Windows\bat\Build-AI.bat mercury
   ```
@@ -176,37 +149,17 @@ The same wrapper set exists as shell scripts under [scripts/Linux](scripts/Linux
 ./scripts/Linux/Remove-AI.sh mercury
 ```
 
-Or use the CLI directly - same commands:
-
-```bash
-janus start mercury
-janus status
-janus build mercury
-janus stop mercury
-janus stop
-```
-
-Run `janus help` at any time for the full list of commands.
+See the [Janus API documentation](src/Janus/JanusAPI_Doc.md#cli) for supported commands and options.
 
 -----------------------------------------------------
 
-## Using DomusAPI as a library
-```python
-import DomusAPI
-
-DomusAPI.init()                                    # context + event bus, non-interactive
-print(DomusAPI.detect_hardware().primary_accelerator)
-reply = DomusAPI.ask("mercury", "Explain this function: ...")
-notes = DomusAPI.get_context().store_conversation_note("user prefers pytest")
-print(DomusAPI.list_models())
-DomusAPI.shutdown()
-```
-Subscribe to runtime events with `DomusAPI.subscribe(Mercurius.EventType.MESSAGE_RECEIVED, callback)` - the bus carries model lifecycle, conversation traffic, memory intents, and MCP tool activity.
+## Using the Python APIs
+For library setup, model operations, messaging, memory, MCP permissions, hardware inspection, and event subscriptions, start with the [DomusAPI documentation](src/DomusAPI/DomusAPI_Doc.md). Use the subsystem API docs linked in [Project Structure and Architecture](#project-structure-and-architecture) when lower-level control is needed.
 
 -----------------------------------------------------
 
 ## Running Tests
-Domus-AI uses `pytest` for its test suite under [tests](tests). `pytest` is installed as part of [requirements.txt](requirements.txt)/`install.py`.
+Domus-AI uses `pytest` for its test suite under [tests](tests). Install the `[dev]` extra declared in [pyproject.toml](pyproject.toml) to add pytest.
 
 ### Cross-platform test runner
 [scripts/run_tests.py](scripts/run_tests.py) runs the full suite the same way on Linux, macOS, and Windows, streaming results to the console while also saving a full copy to `test-output.log` at the repo root for easy sharing:
@@ -244,3 +197,4 @@ pytest
 ```
 
 -----------------------------------------------------
+

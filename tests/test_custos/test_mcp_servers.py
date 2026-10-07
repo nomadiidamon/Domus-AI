@@ -1,6 +1,6 @@
 """
-Tests for the local MCP tool servers under mcp/ (filesystem, git, fetch)
-and the shared stdio server host (mcp/server.py).
+Tests for the local MCP tool servers under DomusMCP/ (filesystem, git, fetch)
+and the shared stdio server host (DomusMCP/server.py).
 
 Everything is hermetic: filesystem tools run against tmp_path (via the
 host_project_dir fixture's LOCAL_AI_RUNTIME_HOST), git tools run in a
@@ -48,7 +48,7 @@ class _FailingTool:
 
 @pytest.fixture
 def server():
-    from mcp.server import ToolServer
+    from DomusMCP.server import ToolServer
     return ToolServer("test-server", {"echo": _FakeTool, "boom": _FailingTool})
 
 
@@ -120,41 +120,41 @@ class TestToolServerProtocol:
 class TestFilesystemTools:
     def test_read_file(self, host_project_dir):
         (host_project_dir / "note.txt").write_text("hello world")
-        from mcp.filesystem.tools import read_file
+        from DomusMCP.filesystem.tools import read_file
         assert read_file.call({"path": "note.txt"}) == "hello world"
 
     def test_read_file_max_chars(self, host_project_dir):
         (host_project_dir / "big.txt").write_text("x" * 100)
-        from mcp.filesystem.tools import read_file
+        from DomusMCP.filesystem.tools import read_file
         assert read_file.call({"path": "big.txt", "max_chars": 10}) == "x" * 10
 
     def test_read_file_missing_raises(self, host_project_dir):
-        from mcp.filesystem.tools import read_file
+        from DomusMCP.filesystem.tools import read_file
         with pytest.raises(FileNotFoundError):
             read_file.call({"path": "nope.txt"})
 
     def test_list_directory(self, host_project_dir):
         (host_project_dir / "a.txt").write_text("a")
         (host_project_dir / "sub").mkdir()
-        from mcp.filesystem.tools import list_directory
+        from DomusMCP.filesystem.tools import list_directory
         assert list_directory.call({}) == "a.txt\nsub/"
 
     def test_search_files(self, host_project_dir):
         (host_project_dir / "src").mkdir()
         (host_project_dir / "src" / "main.py").write_text("")
         (host_project_dir / "readme.md").write_text("")
-        from mcp.filesystem.tools import search_files
+        from DomusMCP.filesystem.tools import search_files
         expected = os.path.normpath("src/main.py") 
         assert os.path.normpath(search_files.call({"pattern": ".py"})) == expected
 
     def test_write_file_creates_parents(self, host_project_dir):
-        from mcp.filesystem.tools import write_file
+        from DomusMCP.filesystem.tools import write_file
         result = write_file.call({"path": "deep/nested/out.txt", "content": "data"})
         assert "out.txt" in result
         assert (host_project_dir / "deep/nested/out.txt").read_text() == "data"
 
     def test_path_escape_is_refused(self, host_project_dir):
-        from mcp.filesystem.tools import read_file
+        from DomusMCP.filesystem.tools import read_file
         with pytest.raises(ValueError, match="escapes project root"):
             read_file.call({"path": "../../etc/hostname"})
 
@@ -164,7 +164,7 @@ class TestEditFile:
         target = host_project_dir / "code.py"
         target.write_text("line1\nline2\nline3\n")
 
-        from mcp.filesystem.tools import edit_file
+        from DomusMCP.filesystem.tools import edit_file
         result = edit_file.call({
             "path": "code.py", "start_line": 2, "end_line": 2,
             "content": "replaced",
@@ -177,7 +177,7 @@ class TestEditFile:
         target = host_project_dir / "f.txt"
         target.write_text("a\nb\nc\nd\n")
 
-        from mcp.filesystem.tools import edit_file
+        from DomusMCP.filesystem.tools import edit_file
         edit_file.call({
             "path": "f.txt", "start_line": 2, "end_line": 3,
             "content": "x\ny\nz",
@@ -189,7 +189,7 @@ class TestEditFile:
         target = host_project_dir / "f.txt"
         target.write_text("a\nb\n")
 
-        from mcp.filesystem.tools import edit_file
+        from DomusMCP.filesystem.tools import edit_file
         with pytest.raises(ValueError, match=">= 1"):
             edit_file.call({"path": "f.txt", "start_line": 0, "end_line": 1, "content": "x"})
         with pytest.raises(ValueError, match=">= start_line"):
@@ -198,12 +198,12 @@ class TestEditFile:
             edit_file.call({"path": "f.txt", "start_line": 1, "end_line": 99, "content": "x"})
 
     def test_missing_file_raises(self, host_project_dir):
-        from mcp.filesystem.tools import edit_file
+        from DomusMCP.filesystem.tools import edit_file
         with pytest.raises(FileNotFoundError):
             edit_file.call({"path": "ghost.txt", "start_line": 1, "end_line": 1, "content": "x"})
 
     def test_cannot_escape_project_root(self, host_project_dir):
-        from mcp.filesystem.tools import edit_file
+        from DomusMCP.filesystem.tools import edit_file
         with pytest.raises(ValueError, match="escapes project root"):
             edit_file.call({"path": "../../tmp/evil.txt", "start_line": 1, "end_line": 1, "content": "x"})
 
@@ -216,17 +216,17 @@ class TestReadExternalFile:
     def test_reads_absolute_path_when_human_approves(self, tmp_path, monkeypatch):
         external = tmp_path / "outside.txt"
         external.write_text("external content")
-        monkeypatch.setattr("mcp.confirmation.request_confirmation", lambda prompt: True)
+        monkeypatch.setattr("DomusMCP.confirmation.request_confirmation", lambda prompt: True)
 
-        from mcp.filesystem.tools import read_external_file
+        from DomusMCP.filesystem.tools import read_external_file
         assert read_external_file.call({"path": str(external)}) == "external content"
 
     def test_denied_when_human_says_no(self, tmp_path, monkeypatch):
         external = tmp_path / "secret.txt"
         external.write_text("must not leak")
-        monkeypatch.setattr("mcp.confirmation.request_confirmation", lambda prompt: False)
+        monkeypatch.setattr("DomusMCP.confirmation.request_confirmation", lambda prompt: False)
 
-        from mcp.filesystem.tools import read_external_file
+        from DomusMCP.filesystem.tools import read_external_file
         with pytest.raises(PermissionError, match="User denied"):
             read_external_file.call({"path": str(external)})
 
@@ -234,9 +234,9 @@ class TestReadExternalFile:
         """A model-supplied confirm:true must NOT bypass the human prompt."""
         external = tmp_path / "secret.txt"
         external.write_text("must not leak")
-        monkeypatch.setattr("mcp.confirmation.request_confirmation", lambda prompt: False)
+        monkeypatch.setattr("DomusMCP.confirmation.request_confirmation", lambda prompt: False)
 
-        from mcp.filesystem.tools import read_external_file
+        from DomusMCP.filesystem.tools import read_external_file
         with pytest.raises(PermissionError):
             read_external_file.call({"path": str(external), "confirm": True})
 
@@ -245,11 +245,11 @@ class TestReadExternalFile:
         external.write_text("pre-approved")
         monkeypatch.setenv("DOMUS_APPROVED_EXTERNAL_READS", str(external))
         monkeypatch.setattr(
-            "mcp.confirmation.request_confirmation",
+            "DomusMCP.confirmation.request_confirmation",
             lambda prompt: pytest.fail("prompt should not run for pre-approved paths"),
         )
 
-        from mcp.filesystem.tools import read_external_file
+        from DomusMCP.filesystem.tools import read_external_file
         assert read_external_file.call({"path": str(external)}) == "pre-approved"
 
     def test_env_var_matches_exact_paths_only(self, tmp_path, monkeypatch):
@@ -258,20 +258,20 @@ class TestReadExternalFile:
         other = tmp_path / "other.txt"
         other.write_text("y")
         monkeypatch.setenv("DOMUS_APPROVED_EXTERNAL_READS", str(approved))
-        monkeypatch.setattr("mcp.confirmation.request_confirmation", lambda prompt: False)
+        monkeypatch.setattr("DomusMCP.confirmation.request_confirmation", lambda prompt: False)
 
-        from mcp.filesystem.tools import read_external_file
+        from DomusMCP.filesystem.tools import read_external_file
         read_external_file.call({"path": str(approved)})  # allowed
         with pytest.raises(PermissionError):
             read_external_file.call({"path": str(other)})
 
     def test_rejects_relative_path(self):
-        from mcp.filesystem.tools import read_external_file
+        from DomusMCP.filesystem.tools import read_external_file
         with pytest.raises(ValueError, match="absolute path"):
             read_external_file.call({"path": "relative/file.txt"})
 
     def test_missing_file_raises(self, tmp_path):
-        from mcp.filesystem.tools import read_external_file
+        from DomusMCP.filesystem.tools import read_external_file
         with pytest.raises(FileNotFoundError):
             read_external_file.call({"path": str(tmp_path / "nope.txt")})
 
@@ -279,14 +279,14 @@ class TestReadExternalFile:
 class TestConfirmationModule:
     def test_preapproval_requires_exact_membership(self, monkeypatch):
         import os
-        from mcp.confirmation import is_preapproved
+        from DomusMCP.confirmation import is_preapproved
         monkeypatch.setenv("DOMUS_APPROVED_EXTERNAL_READS",
                            os.pathsep.join(["/a.txt", "/b.txt"]))
         assert is_preapproved("/a.txt") is True
         assert is_preapproved("/c.txt") is False
 
     def test_prompt_accepts_only_explicit_yes(self, monkeypatch):
-        from mcp import confirmation
+        from DomusMCP import confirmation
         answers = iter(["y\n", "yes\n", "n\n", "\n", "whatever\n"])
         monkeypatch.setattr("sys.stdin.readline", lambda: next(answers))
         monkeypatch.setattr("os.path.exists", lambda p: False)  # force stdin path
@@ -305,8 +305,8 @@ class TestToolConfirmationFlow:
 
     @pytest.fixture
     def external_server(self):
-        from mcp.filesystem.tools import read_external_file
-        from mcp.server import ToolServer
+        from DomusMCP.filesystem.tools import read_external_file
+        from DomusMCP.server import ToolServer
         return ToolServer("test-fs", {"read_external_file": read_external_file})
 
     def _invoke(self, server, arguments, request_id=1):
@@ -318,7 +318,7 @@ class TestToolConfirmationFlow:
     def test_denial_returns_denied_result(self, external_server, tmp_path, monkeypatch):
         target = tmp_path / "secret.txt"
         target.write_text("should never be read")
-        monkeypatch.setattr("mcp.confirmation.request_confirmation", lambda prompt: False)
+        monkeypatch.setattr("DomusMCP.confirmation.request_confirmation", lambda prompt: False)
 
         response = self._invoke(external_server, {"path": str(target)})
 
@@ -330,7 +330,7 @@ class TestToolConfirmationFlow:
     def test_approval_runs_the_tool(self, external_server, tmp_path, monkeypatch):
         target = tmp_path / "secret.txt"
         target.write_text("now readable")
-        monkeypatch.setattr("mcp.confirmation.request_confirmation", lambda prompt: True)
+        monkeypatch.setattr("DomusMCP.confirmation.request_confirmation", lambda prompt: True)
 
         response = self._invoke(external_server, {"path": str(target)})
 
@@ -341,7 +341,7 @@ class TestToolConfirmationFlow:
         import Mercurius
         # Approval happens inside the tool; the event must fire only after the
         # human has actually approved - so approve here.
-        monkeypatch.setattr("mcp.confirmation.request_confirmation", lambda prompt: True)
+        monkeypatch.setattr("DomusMCP.confirmation.request_confirmation", lambda prompt: True)
         (tmp_path / "x.txt").write_text("data")
         bus = Mercurius.initialize_bus()
         received = []
@@ -359,7 +359,7 @@ class TestToolConfirmationFlow:
 
     def test_denied_confirmation_does_not_publish_approval_event(self, external_server, tmp_path, monkeypatch):
         import Mercurius
-        monkeypatch.setattr("mcp.confirmation.request_confirmation", lambda prompt: False)
+        monkeypatch.setattr("DomusMCP.confirmation.request_confirmation", lambda prompt: False)
         (tmp_path / "x.txt").write_text("data")
         bus = Mercurius.initialize_bus()
         confirmations, results = [], []
@@ -376,8 +376,8 @@ class TestToolConfirmationFlow:
 
     def test_regular_tools_publish_invoked_and_result(self, host_project_dir):
         import Mercurius
-        from mcp.filesystem.tools import read_file
-        from mcp.server import ToolServer
+        from DomusMCP.filesystem.tools import read_file
+        from DomusMCP.server import ToolServer
 
         target = host_project_dir / "in.txt"
         target.write_text("data")
@@ -402,7 +402,7 @@ class TestToolConfirmationFlow:
 
     def test_tool_failure_publishes_error_result(self):
         import Mercurius
-        from mcp.server import ToolServer
+        from DomusMCP.server import ToolServer
 
         class Failing:
             TOOL = {"name": "fail", "description": "", "inputSchema": {}}
@@ -449,37 +449,37 @@ def git_repo(tmp_path, monkeypatch):
 
 class TestGitTools:
     def test_git_status_clean(self, git_repo):
-        from mcp.git.tools import git_status
+        from DomusMCP.git.tools import git_status
         output = git_status.call({})
         assert "##" in output  # branch line from --branch
 
     def test_git_status_shows_untracked(self, git_repo):
         (git_repo / "new.txt").write_text("new")
-        from mcp.git.tools import git_status
+        from DomusMCP.git.tools import git_status
         assert "new.txt" in git_status.call({})
 
     def test_git_diff_no_changes(self, git_repo):
-        from mcp.git.tools import git_diff
+        from DomusMCP.git.tools import git_diff
         assert git_diff.call({}) == "(no changes)"
 
     def test_git_diff_shows_change(self, git_repo):
         (git_repo / "tracked.txt").write_text("v2\n")
-        from mcp.git.tools import git_diff
+        from DomusMCP.git.tools import git_diff
         assert "+v2" in git_diff.call({})
 
     def test_git_log(self, git_repo):
-        from mcp.git.tools import git_log
+        from DomusMCP.git.tools import git_log
         assert "initial" in git_log.call({"count": 5})
 
     def test_git_add_and_commit(self, git_repo):
-        from mcp.git.tools import git_add, git_commit, git_log
+        from DomusMCP.git.tools import git_add, git_commit, git_log
         (git_repo / "added.txt").write_text("content")
         git_add.call({"paths": ["added.txt"]})
         git_commit.call({"message": "add a file"})
         assert "add a file" in git_log.call({})
 
     def test_git_failure_raises(self, git_repo):
-        from mcp.git import run_git
+        from DomusMCP.git import run_git
         with pytest.raises(RuntimeError, match="git .* failed"):
             run_git("rev-parse", "--verify", "nonexistent-ref")
 
@@ -496,7 +496,7 @@ class TestFetchTool:
         body.__enter__ = lambda s: s
         body.__exit__ = MagicMock(return_value=False)
 
-        from mcp.fetch.tools import fetch
+        from DomusMCP.fetch.tools import fetch
         with patch("urllib.request.urlopen", return_value=body) as mock_open:
             result = fetch.call({"url": "https://example.com"})
 
@@ -504,7 +504,7 @@ class TestFetchTool:
         assert mock_open.call_args[0][0].full_url == "https://example.com"
 
     def test_fetch_rejects_non_http(self):
-        from mcp.fetch.tools import fetch
+        from DomusMCP.fetch.tools import fetch
         with pytest.raises(ValueError, match="http"):
             fetch.call({"url": "file:///etc/passwd"})
 
@@ -515,7 +515,7 @@ class TestFetchTool:
         body.__enter__ = lambda s: s
         body.__exit__ = MagicMock(return_value=False)
 
-        from mcp.fetch.tools import fetch
+        from DomusMCP.fetch.tools import fetch
         with patch("urllib.request.urlopen", return_value=body):
             result = fetch.call({"url": "https://example.com", "max_chars": 10})
 
@@ -533,14 +533,14 @@ class TestServersJsonMatchesLocalServers:
         from pathlib import Path
 
         servers = _json.loads(
-            (Path(__file__).resolve().parents[2] / "mcp" / "servers.json").read_text()
+            (Path(__file__).resolve().parents[2] / "src" / "DomusMCP" / "servers.json").read_text()
         )["servers"]
 
         for name, spec in servers.items():
             assert spec["command"] == "python", f"{name} should run locally"
             module = spec["args"][-1]
-            assert module == f"mcp.{name}", f"{name}: args should invoke its package"
-            package_dir = Path(__file__).resolve().parents[2] / "mcp" / name
+            assert module == f"DomusMCP.{name}", f"{name}: args should invoke its package"
+            package_dir = Path(__file__).resolve().parents[2] / "src" / "DomusMCP" / name
             assert (package_dir / "__main__.py").is_file(), f"{name}: missing __main__.py"
 
     def test_every_profile_tool_has_a_matching_implementation(self):
@@ -548,7 +548,7 @@ class TestServersJsonMatchesLocalServers:
         from pathlib import Path
 
         root = Path(__file__).resolve().parents[2]
-        profiles_dir = root / "mcp" / "profiles"
+        profiles_dir = root / "src" / "DomusMCP" / "profiles"
 
         for profile_file in profiles_dir.glob("*.json"):
             profile = _json.loads(profile_file.read_text())
@@ -556,8 +556,8 @@ class TestServersJsonMatchesLocalServers:
                 if tools == ["*"]:
                     continue
                 for tool in tools:
-                    module = root / "mcp" / server / "tools" / f"{tool}.py"
+                    module = root / "src" / "DomusMCP" / server / "tools" / f"{tool}.py"
                     assert module.is_file(), (
                         f"{profile_file.name}: tool '{tool}' has no implementation "
-                        f"at mcp/{server}/tools/{tool}.py"
+                        f"at DomusMCP/{server}/tools/{tool}.py"
                     )

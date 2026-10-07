@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from mcp.confirmation import require_user_approval
+from DomusMCP.confirmation import require_user_approval
 
 # Unlike every other filesystem tool, this one reads OUTSIDE the project
 # root. The 'confirm' argument in a tools/call request comes from the
 # model, so it proves nothing - approval is obtained from the human
-# running Domus-AI at call time (see mcp/confirmation.py).
+# running Domus-AI at call time (see DomusMCP/confirmation.py).
 
 # Marker for the ToolServer host: invoking this tool warrants a
 # TOOL_CONFIRMATION_REQUIRED bus event so subscribers can watch for it.

@@ -116,16 +116,28 @@ class TestMercuriusBridge:
         assert len(received) == 1
         assert received[0].payload["message"] == "boom"
 
-    def test_unmapped_context_types_publish_as_custom(self, context, bus):
+    def test_inference_events_publish_as_inference_run(self, context, bus):
         import Mercurius
         received = []
-        bus.subscribe(Mercurius.EventType.CUSTOM, received.append)
+        bus.subscribe(Mercurius.EventType.INFERENCE_RUN, received.append)
 
         context.record_inference("mercury", tokens_processed=10, latency_ms=1.0)
         bus.stop(drain=True)
 
         assert len(received) == 1
+        assert received[0].type is Mercurius.EventType.INFERENCE_RUN
         assert received[0].payload["metadata"]["model_name"] == "mercury"
+
+    def test_state_changed_events_publish_as_state_changed(self, context, bus):
+        import Mercurius
+        received = []
+        bus.subscribe(Mercurius.EventType.STATE_CHANGED, received.append)
+
+        context.log_event(ContextEventType.STATE_CHANGED, "state changed")
+        bus.stop(drain=True)
+
+        assert len(received) == 1
+        assert received[0].type is Mercurius.EventType.STATE_CHANGED
 
     def test_no_bus_means_no_crash(self, context):
         # Root conftest's bus-reset fixtures guarantee no bus is running here.

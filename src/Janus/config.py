@@ -19,17 +19,8 @@ _config_cache = {
 
 def _get_config_dir() -> Path:
     """Get the config directory path."""
-    # Config should be relative to project root
-    try:
-        from .paths import find_root
-        return find_root() / "config"
-    except Exception:
-        # Fallback: look for config directory relative to this file
-        current = Path(__file__).parent.parent
-        config_dir = current / "config"
-        if config_dir.exists():
-            return config_dir
-        raise RuntimeError("Could not find config directory")
+    from .paths import get_config_path
+    return get_config_path()
 
 def load_env() -> bool:
     """

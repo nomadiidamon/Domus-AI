@@ -117,7 +117,7 @@ class ToolServer:
         if module is None:
             return self._error(request_id, INVALID_PARAMS, f"Unknown tool: {name}")
 
-        # Confirmation is enforced inside the tool itself (mcp/confirmation.py
+        # Confirmation is enforced inside the tool itself (DomusMCP/confirmation.py
         # asks the human on their TTY). The REQUIRES_CONFIRMATION marker only
         # controls the post-approval TOOL_CONFIRMATION_REQUIRED event below.
         confirmation_gated = getattr(module, "REQUIRES_CONFIRMATION", False)

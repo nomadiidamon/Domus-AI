@@ -1,5 +1,6 @@
 # Determines pathing in the project. Util for finding the root of the project and other pathing needs.
 import os
+from importlib import resources
 from pathlib import Path
 
 _DOMUS_MARKER_NAME = ".domus-marker"
@@ -44,13 +45,25 @@ def find_root():
 # ---------------------------------------------------------------------------
 # Runtime source paths  (read-only, inside the Local-AI-Runtime install)
 # ---------------------------------------------------------------------------
+def _packaged_dir(package: str, subdir: str | None, override_name: str) -> Path:
+    """Resolve a bundled data dir via importlib.resources.
+
+    LOCAL_AI_RUNTIME_ROOT, when set, takes precedence and is expected to hold
+    `override_name` directly (marker-validated by find_root()).
+    """
+    if os.environ.get("LOCAL_AI_RUNTIME_ROOT"):
+        return find_root() / override_name
+    base = resources.files(package)
+    return Path(str(base.joinpath(subdir) if subdir else base))
+
+def get_config_path():
+    return _packaged_dir("DomusData", "config", "config")
+
 def get_modelfiles_path():
-    root = find_root()
-    return root / "Modelfiles"
+    return _packaged_dir("DomusData", "Modelfiles", "Modelfiles")
 
 def get_mcp_path():
-    root = find_root()
-    return root / "mcp"
+    return _packaged_dir("DomusMCP", None, "mcp")
 
 def get_python_requirements_path():
     root = find_root()

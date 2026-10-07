@@ -16,6 +16,7 @@ from typing import Optional, Dict, Any, List, Set
 from dataclasses import dataclass, field, fields, asdict
 from enum import Enum
 import threading
+from Mercurius import EventType, publish_event
 
 from Hestia.hardware import (
     HardwareProfile, HardwareDetector, ModelRecommender, ModelRecommendation,
@@ -34,30 +35,14 @@ class RuntimeMode(Enum):
     TRAINING = "training"
 
 
-class ContextEventType(Enum):
-    """Events that can be tracked in context."""
-    STARTUP = "startup"
-    SHUTDOWN = "shutdown"
-    MODEL_LOADED = "model_loaded"
-    MODEL_UNLOADED = "model_unloaded"
-    INFERENCE_RUN = "inference_run"
-    ERROR = "error"
-    WARNING = "warning"
-    STATE_CHANGED = "state_changed"
-    # Conversation traffic to/from models
-    MESSAGE_SENT = "message_sent"
-    MESSAGE_RECEIVED = "message_received"
-    # Memory operations (condense/store/remember)
-    CONVERSATION_CONDENSED = "conversation_condensed"
-    MEMORY_STORED = "memory_stored"
-    USER_MEMORY_UPDATED = "user_memory_updated"
+ContextEventType = EventType
 
 
 @dataclass
 class ContextEvent:
     """Record of a runtime event."""
     timestamp: str
-    event_type: ContextEventType
+    event_type: EventType
     message: str
     metadata: Dict[str, Any] = field(default_factory=dict)
     
@@ -607,30 +592,12 @@ class RuntimeContext:
             if len(self.events) > self.max_events_memory:
                 self.events = self.events[-self.max_events_memory:]
 
-        # Bridge to the Mercurius bus outside the lock - publish_event is a
-        # no-op when no bus is running, so Mentis stays usable standalone.
-        try:
-            from Mercurius import EventType as BusEventType, publish_event
-            bus_type = {
-                ContextEventType.STARTUP: BusEventType.STARTUP,
-                ContextEventType.SHUTDOWN: BusEventType.SHUTDOWN,
-                ContextEventType.MODEL_LOADED: BusEventType.MODEL_LOADED,
-                ContextEventType.MODEL_UNLOADED: BusEventType.MODEL_UNLOADED,
-                ContextEventType.ERROR: BusEventType.ERROR,
-                ContextEventType.WARNING: BusEventType.WARNING,
-                ContextEventType.MESSAGE_SENT: BusEventType.MESSAGE_SENT,
-                ContextEventType.MESSAGE_RECEIVED: BusEventType.MESSAGE_RECEIVED,
-                ContextEventType.CONVERSATION_CONDENSED: BusEventType.CONVERSATION_CONDENSED,
-                ContextEventType.MEMORY_STORED: BusEventType.MEMORY_STORED,
-                ContextEventType.USER_MEMORY_UPDATED: BusEventType.USER_MEMORY_UPDATED,
-            }.get(event_type, BusEventType.CUSTOM)
-            publish_event(
-                bus_type,
-                source="mentis",
-                payload={"message": message, "metadata": metadata or {}},
-            )
-        except Exception:
-            logger.debug("Mercurius bus unavailable; event not published", exc_info=True)
+        # publish_event is a no-op without a running bus.
+        publish_event(
+            event_type,
+            source="mentis",
+            payload={"message": message, "metadata": metadata or {}},
+        )
 
     def condense_conversation(self, keep_recent: int = 10) -> Optional[Dict[str, Any]]:
         """Condense conversation history, keeping only the most recent messages."""

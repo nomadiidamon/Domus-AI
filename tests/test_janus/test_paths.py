@@ -2,8 +2,11 @@
 Tests for Janus/paths.py
 
 paths.py resolves two independent roots:
-  - the runtime *source* root (find_root(), via .domus-marker) - where
-    Domus-AI itself is installed.
+  - the runtime *source* data (config, Modelfiles, MCP servers/profiles),
+    bundled as the DomusData/DomusMCP packages and found via
+    importlib.resources. LOCAL_AI_RUNTIME_ROOT (validated through
+    find_root() and .domus-marker) overrides it. The default branch is
+    covered in test_packaging.py.
   - the *host project* root (get_host_project_root(), via
     .domus-host-marker) - the project this runtime instance is working
     inside, writable, created on demand.
@@ -37,7 +40,8 @@ class TestFindRoot:
 
     def test_finds_root_by_walking_up_from_file_location(self, monkeypatch):
         """
-        Without LOCAL_AI_RUNTIME_ROOT set, find_root() walks up from
+        Without LOCAL_AI_RUNTIME_ROOT set, find_root() (now only a
+        source-checkout/override fallback) walks up from
         paths.py's own file location looking for .domus-marker - which
         in this real checkout means it should resolve to the actual
         project root (where .domus-marker genuinely lives).
@@ -48,6 +52,8 @@ class TestFindRoot:
 
 
 class TestRuntimeSourcePaths:
+    """Override branch (LOCAL_AI_RUNTIME_ROOT set); see test_packaging.py for the default."""
+
     def test_get_modelfiles_path(self, isolated_runtime_root):
         assert paths.get_modelfiles_path() == isolated_runtime_root / "Modelfiles"
 

@@ -1,4 +1,4 @@
-from mcp.filesystem import resolve_safe
+from DomusMCP.filesystem import resolve_safe
 
 TOOL = {
     "name": "write_file",

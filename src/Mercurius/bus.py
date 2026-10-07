@@ -19,6 +19,8 @@ class EventType(Enum):
     MODEL_UNLOADED = "model_unloaded"
     ERROR = "error"
     WARNING = "warning"
+    INFERENCE_RUN = "inference_run"
+    STATE_CHANGED = "state_changed"
     # Conversation traffic to/from models (published by Faber.messaging)
     MESSAGE_SENT = "message_sent"
     MESSAGE_RECEIVED = "message_received"

@@ -4,11 +4,15 @@ import pytest
 
 from Mentis.context import ContextEvent, ContextEventType, AIMemory, ProjectConfig
 from Hestia.types import ModelSize
+from Mercurius import EventType
 
 pytestmark = pytest.mark.mentis
 
 
 class TestContextEvent:
+    def test_context_event_type_is_the_bus_event_type(self):
+        assert ContextEventType is EventType
+
     def test_to_dict_converts_enum_and_carries_fields(self):
         event = ContextEvent(
             timestamp="2026-01-01T00:00:00",
