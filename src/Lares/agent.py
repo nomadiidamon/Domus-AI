@@ -255,12 +255,12 @@ class Agent:
         effective_tools = tools if (tools and self.permissions.tools_allowed()) else None
         effective_executor = tool_executor if effective_tools else None
 
-    
+        if self.profile.max_tool_iterations is not None:
+            kwargs.setdefault("max_tool_iterations", self.profile.max_tool_iterations)
 
         response = faber_chat(
             self.model, history, record=False,
             tools=effective_tools, tool_executor=effective_executor,
-            max_tool_iterations = self.profile.max_tool_iterations,
             **kwargs,
         )
 
