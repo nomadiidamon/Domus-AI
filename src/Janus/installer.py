@@ -10,6 +10,8 @@ project root.
 
 Relies on DependencyChecker, PythonPackageDependency, and
 SystemCommandDependency from dependencies.py -- no duplicate logic here.
+
+@todo: Add bash as a system command dependency. Must be on path.
 """
 
 from __future__ import annotations

@@ -1,4 +1,13 @@
-# Handles all AI Runtime commands. Should be the main entry point for the CLI.
+"""
+Handles all AI Runtime commands. Should be the main entry point for the CLI.
+
+@todo: Switch to using argparse for command-line argument parsing
+@todo: Abstract handlers into separate modules for better maintainability
+@todo: Abstract Error handling into utils.py to reuse across modules
+@todo: Abstract handle_chat PrintColor handling into utils.py for consistency
+@todo: Create a dispatch table for commands to simplify command handling and improve maintainability.
+@todo: Add a progress tracker for long-running operations like model building and pulling
+"""
 import itertools
 import sys
 import logging
@@ -272,7 +281,10 @@ def handle_remove(args: list) -> None:
         sys.exit(1)
 
 def handle_ask(args: list) -> None:
-    """Handle the 'ask' command - a single one-off prompt to a model."""
+    """
+    Handle the 'ask' command - a single one-off prompt to a model.
+    @todo: Add a check for if the model is installed before attempting to ask it.
+    """
     if len(args) < 2:
         logger.error("'ask' command requires a model name and a prompt")
         print("Usage: python -m Janus ask <model> <prompt>")
@@ -452,6 +464,8 @@ def handle_chat(args: list) -> None:
     Pass --no-tools to disable this for the session. Tool calls and their
     results are printed as they happen and recorded into AIMemory
     alongside the conversation, so `janus history` shows the full trace.
+
+    @todo: Add a check for if the model is installed before attempting to ask it.
     """
 
     class PrintColors:
@@ -637,7 +651,10 @@ def handle_chat(args: list) -> None:
 def _handle_chat_slash_command(command: str, ctx, history: list,
                                 tools_enabled: bool = False,
                                 ollama_tools: Optional[list] = None) -> None:
-    """Handle a single /command typed inside the chat REPL."""
+    """
+    Handle a single /command typed inside the chat REPL.
+    @todo: Implement a command for switching models mid-chat. Requires passing the new model name, and then giving it the appropriate context and history so the conversation can continue seamlessly with the new model.
+    """
     parts = command[1:].split(maxsplit=1)
     name = parts[0].lower() if parts else ""
     rest = parts[1].strip() if len(parts) > 1 else ""
@@ -885,7 +902,11 @@ def handle_mcp_tools(args: list) -> None:
         sys.exit(1)
  
 def handle_mcp_launch(args: list) -> None:
-    """Handle launching Claude Code via Ollama."""
+    """
+    Handle launching Claude Code via Ollama.
+
+    @todo: Rename function to reflect it only launching Claude Code
+    """
     if len(args) < 1:
         logger.error("'mcp launch' requires a model name")
         print("Usage: python -m Janus mcp launch <model> [--yes]")

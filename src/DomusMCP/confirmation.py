@@ -27,6 +27,7 @@ import sys
 
 logger = logging.getLogger(__name__)
 
+## @todo: Add external pre-approved paths to the configuration file for non-interactive approval.
 _APPROVED_ENV_VAR = "DOMUS_APPROVED_EXTERNAL_READS"
 
 

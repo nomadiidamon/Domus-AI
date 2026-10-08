@@ -34,6 +34,8 @@ class AgentPermissions:
         manager: Optional MCPManager to use instead of a fresh one -
                  mainly for tests; a fresh MCPManager is cheap (it just
                  lazily reads JSON files) so sharing one isn't required.
+
+    @todo: Try to integrate this as a sub-class of mcp.py's Permission class 
     """
 
     def __init__(self, model: str, profile: "AgentProfile",

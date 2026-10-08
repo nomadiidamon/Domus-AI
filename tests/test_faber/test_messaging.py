@@ -375,16 +375,24 @@ class TestLiveModelMessaging:
         if not any(m["name"].startswith(self.LIVE_MODEL) for m in list_models()):
             pull_model(self.LIVE_MODEL)
 
-        response = generate(
-            self.LIVE_MODEL,
-            "Reply with exactly the single word: pong",
-            system="You are a test harness. Always follow instructions literally.",
-            timeout=120,
-            record=False,
-        )
+        # A 0.5B model sampled at default temperature is non-deterministic,
+        # so pass if any of a few attempts follows the instruction.
+        attempts = 3
+        contents = []
+        for _ in range(attempts):
+            response = generate(
+                self.LIVE_MODEL,
+                "Reply with exactly the single word: pong",
+                system="You are a test harness. Always follow instructions literally.",
+                timeout=120,
+                record=False,
+            )
+            assert response.done is True
+            contents.append(response.content)
+            if "pong" in response.content.lower():
+                return
 
-        assert response.done is True
-        assert "pong" in response.content.lower()
+        pytest.fail(f"No 'pong' in {attempts} attempts: {contents!r}")
 
     def test_chat_conversation_round_trip(self, live_server):
         from Faber.models import pull_model, list_models

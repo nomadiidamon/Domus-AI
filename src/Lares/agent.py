@@ -23,6 +23,8 @@ Getting a new model working end to end is: add an AgentProfile (and,
 if it needs filesystem/git/fetch tools, an mcp/profiles/<Model>.json -
 unchanged, Custos still owns that file), then `Agent(model_name)`.
 Nothing else needs touching.
+
+@todo: Add the ability to stream chat responses in real-time
 """
 
 import logging
@@ -112,8 +114,21 @@ class Agent:
             if not allowed:
                 continue
             try:
+
+                # Only pass the host root when one is actually resolved; otherwise
+                # the server falls back to its own LOCAL_AI_RUNTIME_HOST/cwd default.
+                extra_env = {}
+                try:
+                    from Janus.paths import get_host_project_root
+                    extra_env["LOCAL_AI_RUNTIME_HOST"] = str(get_host_project_root())
+                except (ImportError, RuntimeError) as e:
+                    logger.warning(
+                        "Agent '%s': host project root unavailable (%s) - "
+                        "continuing without it", self.model, e,
+                    )
+
                 server_config = self.permissions.get_server_config(server)
-                client = MCPClient(server, server_config)
+                client = MCPClient(server, server_config, env=extra_env)
                 client.start()
                 live_tools = client.list_tools()
                 permitted = filter_tools_for_model(
@@ -240,9 +255,12 @@ class Agent:
         effective_tools = tools if (tools and self.permissions.tools_allowed()) else None
         effective_executor = tool_executor if effective_tools else None
 
+    
+
         response = faber_chat(
             self.model, history, record=False,
             tools=effective_tools, tool_executor=effective_executor,
+            max_tool_iterations = self.profile.max_tool_iterations,
             **kwargs,
         )
 

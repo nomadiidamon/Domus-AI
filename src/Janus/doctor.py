@@ -1,5 +1,7 @@
-# Checks for all needed dependencies: Python, Ollama, Claude, Git, Models, MCP validation, and more. If any dependencies are missing, it will prompt the user to install them.
-
+""" 
+Checks for all needed dependencies: Python, Ollama, Claude, Git, Models, MCP validation, and more. If any dependencies are missing, it will prompt the user to install them.
+@todo: Add checks to ensure all entries to src/DomusData/models.json have a valid matching modelfile
+"""
 import subprocess
 import logging
 import urllib.request
@@ -13,6 +15,7 @@ from Janus.dependencies import (
 
 logger = logging.getLogger(__name__)
 
+## @todo: Read the config for the correct OLLAMA_API_BASE URL instead of hardcoding it.
 OLLAMA_API_BASE = "http://localhost:11434"
 
 def _build_checker() -> DependencyChecker:
@@ -47,13 +50,6 @@ def _build_checker() -> DependencyChecker:
             required=True,
             description="NVIDIA GPU monitoring",
         ),
-        # Will remove in production
-        #PythonPackageDependency(
-        #    "pytest",
-        #    min_version="7.0.0",
-        #    required=True,
-        #    description="Testing framework",
-        #),
 
         # System commands
         SystemCommandDependency(

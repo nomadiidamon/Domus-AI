@@ -8,6 +8,16 @@ Lives at the project root (a sibling of Hestia, Janus, Mentis, Faber,
 Custos, Mercurius, Lares, DomusAPI) rather than inside any one subsystem,
 since logging configuration and JSON loading are used across all of them
 and none of them is the "owner" of these concerns.
+
+@todo: Incorporate the PrintColor handling from Janus for consistent output formatting across subsystems.
+@todo: Create an error struct with a error symbol and message for consistent error reporting across subsystems.
+@todo: Create a success struct with a success symbol and message for consistent success reporting across subsystems.
+@todo: Create a generic error handling mechanism for all subsystems.
+@todo: Create a function to read a configuration file for a specific value or key.
+@todo: Create a function to write a configuration value to a file.
+@todo: Create a function to parse a string for specific patterns or values.
+@todo: Create a function that can convert a fenced block of text into a different format (e.g., a JSON object to a Python dictionary).
+@todo: Abstract all logging logic here to a centralized logging class for consistent logging behavior across subsystems.
 """
 
 import json
@@ -15,7 +25,7 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 
-
+## @todo: Add a default log format to the configuration for consistent logging across subsystems.
 DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 _logging_configured = False

@@ -1,4 +1,7 @@
-# Handles all model pulling and building commands
+"""
+ Handles all model pulling and building commands
+"""
+
 import subprocess
 import logging
 from pathlib import Path

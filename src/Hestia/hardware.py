@@ -7,6 +7,8 @@
 hardware.py - Detect and profile system hardware capabilities for AI model optimization.
 
 Gathers insights on CPU, RAM, GPU, VRAM, and recommends models based on available resources.
+
+@todo: Segment hardware detection into submodules for CPU, RAM, GPU, and per-platform information.
 """
 
 import os

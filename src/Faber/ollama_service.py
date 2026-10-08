@@ -1,4 +1,10 @@
-# Handles all the ollama commands. Delegates to models.py for model building and pulling, and to session.py for session management.
+"""
+Handles all the ollama commands. Delegates to models.py for model building and pulling, and to session.py for session management.
+
+@todo: Update the start_ollama function to ensure the ollama server is started with the correct environment and configuration for the Domus-AI runtime.
+@todo: Create a subclass of the Faber.backend class (not yet implemented) specifically for managing the Ollama server backend (OllamaBackend).
+"""
+
 import subprocess
 import logging
 from typing import Optional

@@ -34,7 +34,7 @@ The MCP server implementations and their bundled configuration are under [src/Do
 ### Required Dependencies
 - Python: The primary programming language for running the runtime.
 - Ollama: The primary runtime backend for running local AI models. Ensure you have the latest version installed.
-- Git: Required by the runtime and its Git MCP integration; see the [Custos API](src/Custos/CustosAPI_Doc.md).
+- Git: Required by the runtime and its Git MCP integration; see the [Custos API](src/Custos/CustosAPI_Doc.md). bash should also be added to your Path (can lead to test failures if not present).
 
 ### Required Python Packages
 - psutil: v5.9.0 (or greater) for CPU, RAM, and GPU usage monitoring

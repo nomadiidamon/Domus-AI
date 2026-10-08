@@ -10,6 +10,12 @@ Provides:
 - ollama_service: start/stop the Ollama server
 - models: start/stop/build/list/remove local models
 - claude_service: launch/stop Claude Code sessions
+
+@todo: Add a configuration option for the default Ollama server URL.
+@todo: Add a configuration option for the default timeout when communicating with the Ollama server.
+@todo: Add a configuration option for the maximum number of tool iterations (MAX_TOOL_ITERATIONS).
+@todo: Create a base Tool class for all tools to inherit from, ensuring consistent interface and behavior.
+@todo: Create a backend class for managing different model backends, ensuring consistent interface and behavior across all supported backends.
 """
 
 from .session import (

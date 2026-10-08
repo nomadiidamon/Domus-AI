@@ -5,6 +5,8 @@ context.py - Runtime context and state management for Local AI Runtime.
 
 Manages project state, working directories, hardware capabilities, and AI memory.
 Serves as the central state store for the entire runtime.
+
+@todo: Split context management into separate modules for runtime environment, project state, and AI memory.
 """
 
 import os

@@ -1,4 +1,12 @@
-# Messaging to and from models via Ollama's HTTP API (stdlib urllib only).
+"""
+Messaging to and from models via Ollama's HTTP API (stdlib urllib only).
+
+@todo: Create a chat function that allows for thinking controls
+@todo: Create a chat function that allows for streaming responses
+@todo: Create an ask function that allows tool calls
+@todo: Create an ask function that supports streaming responses
+"""
+
 import json
 import logging
 import re
@@ -11,6 +19,7 @@ from Faber.models import _get_context
 
 logger = logging.getLogger(__name__)
 
+## @todo: Read the URL from the configuration instead of hardcoding it.
 DEFAULT_BASE_URL = "http://localhost:11434"
 
 
@@ -237,7 +246,7 @@ def _publish(event_type, model: str, message: Message) -> None:
         logger.debug("Mercurius bus unavailable; messaging event not published",
                      exc_info=True)
 
-
+## @todo: Add MAX_TOOL_ITERATIONS to the configuration options.
 MAX_TOOL_ITERATIONS = 12
 
 
@@ -373,6 +382,8 @@ def generate(
     Convenience wrapper over chat(): builds the message list from prompt
     (and optional system prompt) and adapts the /api/generate response
     into the same ChatResponse shape.
+
+    @todo: Allow passing Ollama `options` (temperature, seed, num_predict)
     """
     body: Dict[str, Any] = {"model": model, "prompt": prompt, "stream": False}
     if system is not None:

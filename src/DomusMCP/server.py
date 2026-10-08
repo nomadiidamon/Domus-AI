@@ -25,6 +25,8 @@ TOOL dict:
 The server reads newline-delimited JSON-RPC messages on stdin and writes
 responses on stdout. Anything a tool prints must go to stderr - stdout is
 protocol-only.
+
+@todo: Abstract ToolServer into a base class to allow different transport mechanisms (e.g., stdio, TCP, WebSocket) while reusing the core MCP handling logic.
 """
 
 import json

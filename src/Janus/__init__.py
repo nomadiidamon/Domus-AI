@@ -9,6 +9,8 @@ Provides:
   commands, directories, env vars)
 - doctor: full diagnostic checks (dependencies, models, MCP, ollama server)
 - installer: first-run install / auto-repair flow
+
+@todo: Segment the module into submodules: Commands [model.py (start, stop, status, build, pull, list, remove), history.py, mcp.py, and doctor.py], Chat- [slash_commands.py, spinner.py,], help.py, main.py
 """
 
 from .paths import find_root, get_host_project_root, get_ai_runtime_dir

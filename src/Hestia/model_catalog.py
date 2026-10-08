@@ -33,6 +33,9 @@ Category keys per tier entry:
   batch_size   - safe concurrent request count
   context      - practical max context window in tokens
   performance  - human-readable speed description
+
+@todo: Abstract the model recommendation logic to allow dynamic updates and easier maintenance.
+@todo: Create a class to hold a model, size, and category for easier management and retrieval.
 """
 
 from typing import Dict, List

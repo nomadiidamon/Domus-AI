@@ -1,5 +1,7 @@
-# Thread-safe, queue-based event bus: publishers enqueue events, a
-# background dispatch thread delivers them to subscribers in FIFO order.
+"""
+Thread-safe, queue-based event bus: publishers enqueue events, a
+background dispatch thread delivers them to subscribers in FIFO order.
+"""
 import logging
 import queue
 import threading

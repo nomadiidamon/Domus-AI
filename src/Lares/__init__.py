@@ -30,6 +30,9 @@ tool setup/response handling itself.
 roles (personas/traits) and persistence (durable agent state across
 restarts) are intentionally stubbed - see their modules for why neither
 is built out yet.
+
+@todo: Finish implementing the roles module
+@todo: Finish implementing the persistence module
 """
 
 from .agent import Agent

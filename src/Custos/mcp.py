@@ -29,6 +29,7 @@ MCPManager answers three questions for the rest of the runtime:
 Full sandboxing/approval workflows are intentionally out of scope for
 now - Permission/Approval below are scaffolding placeholders for that
 future work.
+@todo: Implement full sandboxing/approval workflows.
 """
 
 import json
@@ -52,7 +53,10 @@ class ProfileNotFoundError(MCPConfigError):
 class Permission:
     """Scaffolding for a future approval/sandboxing workflow.
 
-    Not enforced yet - MCPManager.allow_tool is the current gate."""
+    Not enforced yet - MCPManager.allow_tool is the current gate.
+    
+    @todo: Implement full permission class
+    """
     tool: str
     server: str
     model: str
@@ -62,7 +66,12 @@ class Permission:
 
 @dataclass
 class Approval:
-    """Scaffolding record of a granted/denied permission request."""
+    """Scaffolding record of a granted/denied permission request.
+
+    Not enforced yet - MCPManager.allow_tool is the current gate.
+
+    @todo: Implement full approval workflow.
+    """
     permission: Permission
     approved: bool
     reason: str = ""
@@ -237,6 +246,8 @@ def mcp_tools_to_ollama_tools(mcp_tools: List[Dict[str, Any]]) -> List[Dict[str,
 
     Both sides use JSON Schema for parameters, so this is a pure reshape -
     no schema conversion needed.
+
+    @todo: Integrate into the new Tool class once it is implemented.
     """
     return [
         {
