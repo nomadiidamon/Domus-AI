@@ -4,7 +4,7 @@ import pytest
 
 from Mentis.context import ContextEvent, ContextEventType, AIMemory, ProjectConfig
 from Hestia.types import ModelSize
-from Mercurius import EventType
+from DomusEvents import EventType
 
 pytestmark = pytest.mark.mentis
 

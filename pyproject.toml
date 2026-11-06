@@ -16,6 +16,7 @@ dependencies = [
     "packaging>=23.0",
     "nvidia-ml-py>=12.0.0",
     "python-dotenv>=1.0.0",
+    "mercurius-events>=0.5.1",
 ]
 
 [project.optional-dependencies]
@@ -30,7 +31,7 @@ homepage = "https://github.com/nomadiidamon/Domus-AI"
 janus = "Janus.main:main"
 
 # Explicit package list rather than find_packages(), since the subsystem
-# packages (Hestia, Janus, Mentis, Faber, Custos, Mercurius, Lares,
+# packages (Hestia, Janus, Mentis, Faber, Custos, DomusEvents, Lares,
 # DomusAPI) don't share a common namespace prefix - each is independently
 # top-level under src/.
 
@@ -40,7 +41,7 @@ py-modules = ["utils"]
 include-package-data = true
 
 [tool.setuptools.packages]
-find = { where = ["src"], include = ["Hestia*", "Janus*", "Mentis*", "Faber*", "Custos*", "Mercurius*", "Lares*", "DomusAPI*", "DomusMCP*", "DomusData*"] }
+find = { where = ["src"], include = ["Hestia*", "Janus*", "Mentis*", "Faber*", "Custos*", "DomusEvents*", "Lares*", "DomusAPI*", "DomusMCP*", "DomusData*"] }
 
 # Runtime data read through importlib.resources (see Janus.paths).
 [tool.setuptools.package-data]
@@ -65,7 +66,7 @@ markers = [
     "mentis: tests for the Mentis subsystem (runtime context and state)",
     "custos: tests for the Custos subsystem (security, permissions, MCP)",
     "lares: tests for the Lares subsystem (agents) - currently a stub package",
-    "mercurius: tests for the Mercurius subsystem (event bus) - currently a stub package",
+    "domusevents: tests for the DomusEvents module (event vocabulary and process-wide bus over Mercurius)",
     "domusapi: tests for the DomusAPI subsystem (top-level wrapper) - currently a stub package",
     "utils: tests for the shared utils module",
     "e2e: end-to-end tests requiring a live Ollama server (deselect with '-m \"not e2e\"')",

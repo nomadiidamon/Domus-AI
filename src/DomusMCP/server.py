@@ -34,7 +34,7 @@ import logging
 import sys
 import traceback
 
-from Mercurius import EventType as BusEventType
+from DomusEvents import EventType as BusEventType
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class ToolServer:
         in-process (tests, embedded use). It must never break the protocol.
         """
         try:
-            from Mercurius import publish_event
+            from DomusEvents import publish_event
             publish_event(event_type, source=self.name, payload=payload)
         except Exception:
             logger.debug("Mercurius bus unavailable; tool event not published",

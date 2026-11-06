@@ -115,23 +115,23 @@ class TestSetContext:
 
 class TestEventBusChain:
     """start_model/stop_model with a bound RuntimeContext must surface on
-    the Mercurius bus via Mentis' log_event bridge (Faber -> Mentis ->
-    Mercurius), not just via Janus' CLI handlers."""
+    the DomusEvents bus via Mentis' log_event bridge (Faber -> Mentis ->
+    DomusEvents), not just via Janus' CLI handlers."""
 
     @pytest.fixture
     def bus(self):
-        import Mercurius
-        bus = Mercurius.initialize_bus()
+        import DomusEvents
+        bus = DomusEvents.initialize_bus()
         yield bus
-        Mercurius.shutdown_bus(drain=False)
+        DomusEvents.shutdown_bus(drain=False)
 
     def test_start_then_stop_publishes_load_and_unload_events(self, fake_process, bus):
-        import Mercurius
+        import DomusEvents
         from Mentis.context import RuntimeContext
 
         loaded, unloaded = [], []
-        bus.subscribe(Mercurius.EventType.MODEL_LOADED, loaded.append)
-        bus.subscribe(Mercurius.EventType.MODEL_UNLOADED, unloaded.append)
+        bus.subscribe(DomusEvents.EventType.MODEL_LOADED, loaded.append)
+        bus.subscribe(DomusEvents.EventType.MODEL_UNLOADED, unloaded.append)
 
         set_context(RuntimeContext(project_name="ChainTest"))
 

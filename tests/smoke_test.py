@@ -24,7 +24,7 @@ import traceback
 from pathlib import Path
 
 # Make the project's top-level packages (Hestia, Janus, Mentis, Faber,
-# Custos, Mercurius, Lares, DomusAPI, utils) importable regardless of
+# Custos, DomusEvents, Lares, DomusAPI, utils) importable regardless of
 # where this script is invoked from, by adding src/ to sys.path - that's
 # where all of them actually live. Each subpackage has its own __init__.py
 # and uses relative imports internally; cross-package imports (e.g.
@@ -200,18 +200,18 @@ def check_mcp_stub():
 
 def check_stub_packages_import():
     """
-    Mercurius (event bus), Lares (agents), and DomusAPI (top-level wrapper)
+    DomusEvents (event bus), Lares (agents), and DomusAPI (top-level wrapper)
     have no real implementation yet - this just confirms the package tree
     itself is well-formed (each has a valid __init__.py) so the target
     structure holds together even before the real code lands.
     """
-    import Mercurius
+    import DomusEvents
     import Lares
     import DomusAPI
-    assert hasattr(Mercurius, "__all__")
+    assert hasattr(DomusEvents, "__all__")
     assert hasattr(Lares, "__all__")
     assert hasattr(DomusAPI, "__all__")
-    return "Mercurius, Lares, DomusAPI import ok (stubs, no behavior yet)"
+    return "DomusEvents, Lares, DomusAPI import ok (stubs, no behavior yet)"
 
 
 def check_cli_module_imports():
@@ -283,7 +283,7 @@ def check_cli_module_imports():
     suspects = ["cache", "logs", "models", "memory", "config", "sessions", ".ai-runtime"]
     subsystem_dirs = [
         SRC_DIR / name
-        for name in ("Hestia", "Janus", "Mentis", "Faber", "Custos", "Mercurius", "Lares", "DomusAPI")
+        for name in ("Hestia", "Janus", "Mentis", "Faber", "Custos", "DomusEvents", "Lares", "DomusAPI")
     ]
     leaked = []
     for base in [PROJECT_ROOT, *subsystem_dirs]:
@@ -318,7 +318,7 @@ CORE_CHECKS = [
     ("Faber.session create/get/stop cycle", check_session_lifecycle),
     ("Mentis.context module imports", check_context_module),
     ("Custos.mcp.MCPManager stub imports", check_mcp_stub),
-    ("Mercurius/Lares/DomusAPI stub packages import", check_stub_packages_import),
+    ("DomusEvents/Lares/DomusAPI stub packages import", check_stub_packages_import),
     ("Janus (python -m Janus) CLI", check_cli_module_imports),
 ]
 
@@ -339,7 +339,7 @@ def main():
 
     print(f"Domus-AI smoke test")
     print(f"Project root: {PROJECT_ROOT}")
-    print(f"Subsystems:   Hestia, Janus, Mentis, Faber, Custos, Mercurius, Lares, DomusAPI")
+    print(f"Subsystems:   Hestia, Janus, Mentis, Faber, Custos, DomusEvents, Lares, DomusAPI")
     print(f"Test output:  {TEST_OUTPUT_DIR} (isolated, wiped each run)")
     print("-" * 60)
 

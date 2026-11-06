@@ -23,7 +23,7 @@ class TestBuildChecker:
     def test_registers_expected_dependency_names(self):
         checker = doctor._build_checker()
         assert set(checker.dependencies.keys()) == {
-            "psutil", "packaging", "python-dotenv", "nvidia-ml-py",
+            "psutil", "packaging", "python-dotenv", "nvidia-ml-py", "mercurius-events",
             "python", "ollama", "git", "claude",
         }
 

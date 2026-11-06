@@ -20,7 +20,7 @@ Subsystem responsibilities, public APIs, usage examples, and implementation stat
 | DomusAPI  | Stable package-level Python API.                                | [DomusAPI API](src/DomusAPI/DomusAPI_Doc.md)        |
 | Hestia    | Hardware detection and model recommendations.                   | [Hestia API](src/Hestia/HestiaAPI_Doc.md)           |
 | Janus     | CLI, configuration, diagnostics, paths, and runtime lifecycle.  | [Janus API](src/Janus/JanusAPI_Doc.md)              |
-| Mercurius | Process-wide event bus.                                         | [Mercurius API](src/Mercurius/MercuriusAPI_Doc.md)  |
+| DomusEvents | Domus event vocabulary and process-wide bus over the [Mercurius](https://github.com/nomadiidamon/Mercurius) package. | [Mercurius docs](https://nomadiidamon.github.io/Mercurius/PythonAPI.html) |
 | Custos    | MCP permissions, client, and confirmation boundaries.           | [Custos API](src/Custos/CustosAPI_Doc.md)           |
 | Mentis    | Runtime context and persistent memory.                          | [Mentis API](src/Mentis/MentisAPI_Doc.md)           |
 | Lares     | Model profiles, tool permissions, and agent chat policy.        | [Lares API](src/Lares/LaresAPI_Doc.md)              |
@@ -41,6 +41,7 @@ The MCP server implementations and their bundled configuration are under [src/Do
 - packaging: v23.0 (or greater) for version comparison in dependency checks
 - python-dotenv: v1.0 (or greater) for .env file support
 - nvidia-ml-py: v12.0.0 (or greater), required package dependency and used for NVIDIA GPU monitoring
+- mercurius-events: v0.5.1 (or greater) for the queue-based pub/sub event bus
 
 ### Optional Dependencies
 - Claude Code: For Claude models, or direct integration with Claude Code's CLI if desired.

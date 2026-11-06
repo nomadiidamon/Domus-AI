@@ -244,16 +244,16 @@ class TestMessagingBusEvents:
 
     @pytest.fixture
     def bus(self):
-        import Mercurius
-        bus = Mercurius.initialize_bus()
+        import DomusEvents
+        bus = DomusEvents.initialize_bus()
         yield bus
-        Mercurius.shutdown_bus(drain=False)
+        DomusEvents.shutdown_bus(drain=False)
 
     def test_chat_publishes_sent_and_received(self, bus):
-        import Mercurius
+        import DomusEvents
         sent, received = [], []
-        bus.subscribe(Mercurius.EventType.MESSAGE_SENT, sent.append)
-        bus.subscribe(Mercurius.EventType.MESSAGE_RECEIVED, received.append)
+        bus.subscribe(DomusEvents.EventType.MESSAGE_SENT, sent.append)
+        bus.subscribe(DomusEvents.EventType.MESSAGE_RECEIVED, received.append)
 
         payload = {"model": "mercury",
                    "message": {"role": "assistant", "content": "pong"},
@@ -271,10 +271,10 @@ class TestMessagingBusEvents:
         assert received[0].payload["content"] == "pong"
 
     def test_generate_publishes_sent_and_received(self, bus):
-        import Mercurius
+        import DomusEvents
         sent, received = [], []
-        bus.subscribe(Mercurius.EventType.MESSAGE_SENT, sent.append)
-        bus.subscribe(Mercurius.EventType.MESSAGE_RECEIVED, received.append)
+        bus.subscribe(DomusEvents.EventType.MESSAGE_SENT, sent.append)
+        bus.subscribe(DomusEvents.EventType.MESSAGE_RECEIVED, received.append)
 
         payload = {"model": "mercury", "response": "42", "done": True}
         with patch("urllib.request.urlopen", return_value=_http_response(payload)):
@@ -286,9 +286,9 @@ class TestMessagingBusEvents:
         assert len(received) == 1 and received[0].payload["content"] == "42"
 
     def test_no_events_published_on_error(self, bus):
-        import Mercurius
+        import DomusEvents
         received = []
-        bus.subscribe(Mercurius.EventType.MESSAGE_RECEIVED, received.append)
+        bus.subscribe(DomusEvents.EventType.MESSAGE_RECEIVED, received.append)
 
         with patch("urllib.request.urlopen",
                    return_value=_http_response({"error": "boom"})):

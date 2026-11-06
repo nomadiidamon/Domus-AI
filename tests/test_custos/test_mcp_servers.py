@@ -338,19 +338,19 @@ class TestToolConfirmationFlow:
         assert response["result"]["content"][0]["text"] == "now readable"
 
     def test_confirmation_gated_tool_publishes_bus_event(self, external_server, tmp_path, monkeypatch):
-        import Mercurius
+        import DomusEvents
         # Approval happens inside the tool; the event must fire only after the
         # human has actually approved - so approve here.
         monkeypatch.setattr("DomusMCP.confirmation.request_confirmation", lambda prompt: True)
         (tmp_path / "x.txt").write_text("data")
-        bus = Mercurius.initialize_bus()
+        bus = DomusEvents.initialize_bus()
         received = []
-        bus.subscribe(Mercurius.EventType.TOOL_CONFIRMATION_REQUIRED, received.append)
+        bus.subscribe(DomusEvents.EventType.TOOL_CONFIRMATION_REQUIRED, received.append)
         try:
             self._invoke(external_server, {"path": str(tmp_path / "x.txt")})
         finally:
             bus.stop(drain=True)
-            Mercurius.shutdown_bus(drain=False)
+            DomusEvents.shutdown_bus(drain=False)
 
         assert len(received) == 1
         assert received[0].payload["tool"] == "read_external_file"
@@ -358,24 +358,24 @@ class TestToolConfirmationFlow:
         assert received[0].source == "test-fs"
 
     def test_denied_confirmation_does_not_publish_approval_event(self, external_server, tmp_path, monkeypatch):
-        import Mercurius
+        import DomusEvents
         monkeypatch.setattr("DomusMCP.confirmation.request_confirmation", lambda prompt: False)
         (tmp_path / "x.txt").write_text("data")
-        bus = Mercurius.initialize_bus()
+        bus = DomusEvents.initialize_bus()
         confirmations, results = [], []
-        bus.subscribe(Mercurius.EventType.TOOL_CONFIRMATION_REQUIRED, confirmations.append)
-        bus.subscribe(Mercurius.EventType.TOOL_RESULT, results.append)
+        bus.subscribe(DomusEvents.EventType.TOOL_CONFIRMATION_REQUIRED, confirmations.append)
+        bus.subscribe(DomusEvents.EventType.TOOL_RESULT, results.append)
         try:
             self._invoke(external_server, {"path": str(tmp_path / "x.txt")})
         finally:
             bus.stop(drain=True)
-            Mercurius.shutdown_bus(drain=False)
+            DomusEvents.shutdown_bus(drain=False)
 
         assert confirmations == []  # human never approved
         assert results[0].payload["denied"] is True
 
     def test_regular_tools_publish_invoked_and_result(self, host_project_dir):
-        import Mercurius
+        import DomusEvents
         from DomusMCP.filesystem.tools import read_file
         from DomusMCP.server import ToolServer
 
@@ -383,10 +383,10 @@ class TestToolConfirmationFlow:
         target.write_text("data")
         server = ToolServer("test-fs", {"read_file": read_file})
 
-        bus = Mercurius.initialize_bus()
+        bus = DomusEvents.initialize_bus()
         invoked, results = [], []
-        bus.subscribe(Mercurius.EventType.TOOL_INVOKED, invoked.append)
-        bus.subscribe(Mercurius.EventType.TOOL_RESULT, results.append)
+        bus.subscribe(DomusEvents.EventType.TOOL_INVOKED, invoked.append)
+        bus.subscribe(DomusEvents.EventType.TOOL_RESULT, results.append)
         try:
             server.handle({
                 "jsonrpc": "2.0", "id": 9, "method": "tools/call",
@@ -394,14 +394,14 @@ class TestToolConfirmationFlow:
             })
         finally:
             bus.stop(drain=True)
-            Mercurius.shutdown_bus(drain=False)
+            DomusEvents.shutdown_bus(drain=False)
 
         assert [e.payload["tool"] for e in invoked] == ["read_file"]
         assert results[0].payload["is_error"] is False
         assert "data" in results[0].payload["output_preview"]
 
     def test_tool_failure_publishes_error_result(self):
-        import Mercurius
+        import DomusEvents
         from DomusMCP.server import ToolServer
 
         class Failing:
@@ -411,9 +411,9 @@ class TestToolConfirmationFlow:
                 raise ValueError("nope")
 
         server = ToolServer("test-fs", {"fail": Failing})
-        bus = Mercurius.initialize_bus()
+        bus = DomusEvents.initialize_bus()
         results = []
-        bus.subscribe(Mercurius.EventType.TOOL_RESULT, results.append)
+        bus.subscribe(DomusEvents.EventType.TOOL_RESULT, results.append)
         try:
             server.handle({
                 "jsonrpc": "2.0", "id": 10, "method": "tools/call",
@@ -421,7 +421,7 @@ class TestToolConfirmationFlow:
             })
         finally:
             bus.stop(drain=True)
-            Mercurius.shutdown_bus(drain=False)
+            DomusEvents.shutdown_bus(drain=False)
 
         assert results[0].payload["is_error"] is True
         assert "nope" in results[0].payload["error"]

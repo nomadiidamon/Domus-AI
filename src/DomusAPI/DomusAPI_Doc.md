@@ -41,16 +41,16 @@ These functions inspect permission configuration; they do not launch MCP servers
 
 ### Events
 
-- `subscribe(event_type, callback)` initializes the process-wide bus if necessary and subscribes a callback receiving a `Mercurius.Event`.
+- `subscribe(event_type, callback)` initializes the process-wide bus if necessary and subscribes a callback receiving a `Mercurius.Event`, and returns the `Subscription`.
 - `publish(event_type, *, source="domusapi", payload=None)` publishes only when the bus is running; otherwise it is a no-op.
 
-`DomusAPI` does not expose a top-level unsubscribe function. For that operation, use `Mercurius.get_bus().unsubscribe(...)`.
+`DomusAPI` does not expose a top-level unsubscribe function. For that operation, call `unsubscribe()` on the `Subscription` returned by `subscribe()`.
 
 ## Example
 
 ```python
 import DomusAPI
-from Mercurius import EventType
+from DomusEvents import EventType
 
 try:
 	context = DomusAPI.init(".")

@@ -263,7 +263,7 @@ class TestMainCommandDispatch:
 
 
 class TestMainEventBusLifecycle:
-    """main() owns the Mercurius bus: initialize on startup, publish
+    """main() owns the DomusEvents bus: initialize on startup, publish
     STARTUP/SHUTDOWN, and always shut the bus down via the finally block."""
 
     def _run_main(self, monkeypatch, argv, handler_name="handle_start", handler_side_effect=None):
@@ -350,7 +350,7 @@ class TestMainEventBusLifecycle:
  
     def test_history_does_not_touch_the_bus(self, monkeypatch):
         """history is read-only recall - like status/doctor, must never
-        touch the Mercurius bus or construct a mutating RuntimeContext."""
+        touch the DomusEvents bus or construct a mutating RuntimeContext."""
         monkeypatch.setattr("sys.argv", ["janus", "history"])
         with patch("Janus.main.handle_history") as mock_history, \
              patch("Janus.main.initialize_bus") as mock_init, \

@@ -126,6 +126,13 @@ def _build_checker() -> DependencyChecker:  # type: ignore[type-arg]
             required=True,
             description="NVIDIA GPU monitoring",
         ),
+        PythonPackageDependency(
+            "mercurius-events",
+            import_name="Mercurius",
+            min_version="0.5.1",
+            required=True,
+            description="Queue-based pub/sub event bus",
+        ),
 
         # System commands
         SystemCommandDependency(
