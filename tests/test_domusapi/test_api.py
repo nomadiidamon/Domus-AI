@@ -23,7 +23,7 @@ class TestInitShutdown:
 
         with patch("Mentis.context.RuntimeContext", return_value=fake_ctx) as mock_ctx_cls, \
              patch("Faber.models.set_context") as mock_set_context, \
-             patch("Mercurius.initialize_bus") as mock_bus:
+             patch("DomusEvents.initialize_bus") as mock_bus:
             result = DomusAPI.init()
 
         assert result is fake_ctx
@@ -38,7 +38,7 @@ class TestInitShutdown:
 
         with patch("Mentis.context.RuntimeContext", return_value=fake_ctx) as mock_ctx_cls, \
              patch("Faber.models.set_context"), \
-             patch("Mercurius.initialize_bus"):
+             patch("DomusEvents.initialize_bus"):
             first = DomusAPI.init()
             second = DomusAPI.init()
 
@@ -51,7 +51,7 @@ class TestInitShutdown:
 
         with patch("Mentis.context.RuntimeContext", return_value=fake_ctx), \
              patch("Faber.models.set_context"), \
-             patch("Mercurius.initialize_bus"):
+             patch("DomusEvents.initialize_bus"):
             with pytest.raises(RuntimeError, match="startup failed"):
                 DomusAPI.init()
 
@@ -61,10 +61,10 @@ class TestInitShutdown:
 
         with patch("Mentis.context.RuntimeContext", return_value=fake_ctx), \
              patch("Faber.models.set_context"), \
-             patch("Mercurius.initialize_bus"):
+             patch("DomusEvents.initialize_bus"):
             DomusAPI.init()
 
-        with patch("Mercurius.shutdown_bus") as mock_shutdown_bus, \
+        with patch("DomusEvents.shutdown_bus") as mock_shutdown_bus, \
              patch("Faber.models.set_context") as mock_set_context:
             DomusAPI.shutdown()
 
@@ -75,7 +75,7 @@ class TestInitShutdown:
         assert DomusAPI._context is None
 
     def test_shutdown_without_init_does_not_raise(self):
-        with patch("Mercurius.shutdown_bus"):
+        with patch("DomusEvents.shutdown_bus"):
             DomusAPI.shutdown()  # must not raise
 
     def test_failed_init_leaves_no_partial_state(self):
@@ -86,8 +86,8 @@ class TestInitShutdown:
 
         with patch("Mentis.context.RuntimeContext", return_value=fake_ctx), \
              patch("Faber.models.set_context"), \
-             patch("Mercurius.initialize_bus", side_effect=RuntimeError("bus broke")), \
-             patch("Mercurius.shutdown_bus") as mock_shutdown_bus:
+             patch("DomusEvents.initialize_bus", side_effect=RuntimeError("bus broke")), \
+             patch("DomusEvents.shutdown_bus") as mock_shutdown_bus:
             with pytest.raises(RuntimeError, match="bus broke"):
                 DomusAPI.init()
 
@@ -100,8 +100,8 @@ class TestInitShutdown:
 
         with patch("Mentis.context.RuntimeContext", return_value=fake_ctx), \
              patch("Faber.models.set_context"), \
-             patch("Mercurius.initialize_bus"), \
-             patch("Mercurius.shutdown_bus"):
+             patch("DomusEvents.initialize_bus"), \
+             patch("DomusEvents.shutdown_bus"):
             with pytest.raises(RuntimeError, match="startup failed"):
                 DomusAPI.init()
 
@@ -196,8 +196,8 @@ class TestMcp:
 
 class TestEvents:
     def test_subscribe_initializes_bus_if_needed(self):
-        with patch("Mercurius.get_bus", return_value=None), \
-             patch("Mercurius.initialize_bus") as mock_init:
+        with patch("DomusEvents.get_bus", return_value=None), \
+             patch("DomusEvents.initialize_bus") as mock_init:
             bus = MagicMock()
             mock_init.return_value = bus
             DomusAPI.subscribe("event_type", "callback")
@@ -206,15 +206,15 @@ class TestEvents:
 
     def test_subscribe_uses_running_bus(self):
         bus = MagicMock()
-        with patch("Mercurius.get_bus", return_value=bus), \
-             patch("Mercurius.initialize_bus") as mock_init:
+        with patch("DomusEvents.get_bus", return_value=bus), \
+             patch("DomusEvents.initialize_bus") as mock_init:
             DomusAPI.subscribe("event_type", "callback")
 
         mock_init.assert_not_called()
         bus.subscribe.assert_called_once()
 
     def test_publish_delegates_to_module_helper(self):
-        with patch("Mercurius.publish_event") as mock_publish:
+        with patch("DomusEvents.publish_event") as mock_publish:
             DomusAPI.publish("etype", payload={"k": "v"})
         mock_publish.assert_called_once_with("etype", source="domusapi", payload={"k": "v"})
 

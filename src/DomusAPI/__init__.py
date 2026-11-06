@@ -66,7 +66,7 @@ def init(suggested_host=None) -> "object":
 
     from pathlib import Path
 
-    import Mercurius
+    import DomusEvents
     from Faber.models import set_context
     from Mentis.context import RuntimeContext
 
@@ -80,11 +80,11 @@ def init(suggested_host=None) -> "object":
             raise RuntimeError("RuntimeContext startup failed - see logs for details")
 
         set_context(ctx)
-        Mercurius.initialize_bus()
+        DomusEvents.initialize_bus()
     except Exception:
         # Leave no partial state: a failed init must be invisible to callers.
         set_context(None)
-        Mercurius.shutdown_bus(drain=False)
+        DomusEvents.shutdown_bus(drain=False)
         raise
 
     _context = ctx
@@ -94,7 +94,7 @@ def init(suggested_host=None) -> "object":
 def shutdown() -> None:
     """Shut down the runtime context and event bus started by init()."""
     global _context
-    import Mercurius
+    import DomusEvents
     from Faber.models import set_context
 
     # Context first (stops Mentis publishing), then the bus (drains last events).
@@ -102,7 +102,7 @@ def shutdown() -> None:
         _context.shutdown()
         _context = None
     set_context(None)
-    Mercurius.shutdown_bus()
+    DomusEvents.shutdown_bus()
 
 
 def get_context():
@@ -220,18 +220,18 @@ def allow_mcp_tool(tool: str, model: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Events (Mercurius)
+# Events (DomusEvents / Mercurius)
 # ---------------------------------------------------------------------------
-def subscribe(event_type, callback) -> None:
-    """Subscribe a callback to a Mercurius EventType on the process-wide bus."""
-    import Mercurius
-    bus = Mercurius.get_bus()
+def subscribe(event_type, callback):
+    """Subscribe a callback to an event type on the process-wide bus; returns the Subscription."""
+    import DomusEvents
+    bus = DomusEvents.get_bus()
     if bus is None:
-        bus = Mercurius.initialize_bus()
-    bus.subscribe(event_type, callback)
+        bus = DomusEvents.initialize_bus()
+    return bus.subscribe(event_type, callback)
 
 
 def publish(event_type, *, source: str = "domusapi", payload: Optional[dict] = None) -> None:
     """Publish an event on the process-wide bus (no-op if it isn't running)."""
-    import Mercurius
-    Mercurius.publish_event(event_type, source=source, payload=payload)
+    import DomusEvents
+    DomusEvents.publish_event(event_type, source=source, payload=payload)

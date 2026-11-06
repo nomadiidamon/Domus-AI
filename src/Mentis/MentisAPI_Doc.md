@@ -29,7 +29,7 @@ RuntimeContext wrappers for condensing, notes, and facts also log memory events.
 
 ## Events and shared context
 
-Mentis uses the canonical `Mercurius.EventType` for `ContextEvent.event_type` and `RuntimeContext.log_event()`. `ContextEventType` remains exported from Mentis as a compatibility alias to that same enum, so `ContextEventType is Mercurius.EventType`. Mentis emits context events including `INFERENCE_RUN` and `STATE_CHANGED`, which are also first-class Mercurius bus types; there is no separate Mentis event enum or translation map. `ContextEvent.to_dict()` serializes the shared enum's string value along with its message and metadata.
+Mentis uses the canonical `DomusEvents.EventType` (a `str` enum) for `ContextEvent.event_type` and `RuntimeContext.log_event()`. `ContextEventType` remains exported from Mentis as a compatibility alias to that same enum, so `ContextEventType is DomusEvents.EventType`. Mentis emits context events including `INFERENCE_RUN` and `STATE_CHANGED`, which are also first-class bus event types; there is no separate Mentis event enum or translation map. `ContextEvent.to_dict()` serializes the shared enum's string value along with its message and metadata.
 
 `get_context()` returns the process-wide context, creating an in-memory `RuntimeContext` if absent; it does not call `startup()`. `initialize_context(project_name, project_dir=None, mode=...)` replaces the global context with a new in-memory instance and likewise does not start it. For the combined, non-interactive library lifecycle use [DomusAPI](../DomusAPI/DomusAPI_Doc.md).
 

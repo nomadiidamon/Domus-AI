@@ -60,32 +60,32 @@ class TestRecordInference:
         assert any(e.event_type == ContextEventType.INFERENCE_RUN for e in context.events)
 
 
-class TestMercuriusBridge:
-    """log_event() must mirror context events onto the Mercurius bus when
+class TestDomusEventsBridge:
+    """log_event() must mirror context events onto the DomusEvents bus when
     one is running, and silently no-op when it isn't (Mentis stays usable
     standalone)."""
 
     @pytest.fixture
     def bus(self):
-        import Mercurius
-        bus = Mercurius.initialize_bus()
+        import DomusEvents
+        bus = DomusEvents.initialize_bus()
         yield bus
-        Mercurius.shutdown_bus(drain=False)
+        DomusEvents.shutdown_bus(drain=False)
 
     def _drain(self, bus, received):
-        import Mercurius
-        bus.subscribe(Mercurius.EventType.CUSTOM, received.append)  # sentinel
-        Mercurius.publish_event(Mercurius.EventType.CUSTOM)
+        import DomusEvents
+        bus.subscribe(DomusEvents.EventType.CUSTOM, received.append)  # sentinel
+        DomusEvents.publish_event(DomusEvents.EventType.CUSTOM)
         import time
         deadline = time.monotonic() + 2.0
         while not received and time.monotonic() < deadline:
             time.sleep(0.005)
-        bus.unsubscribe(Mercurius.EventType.CUSTOM, received.append)
+        bus.unsubscribe(DomusEvents.EventType.CUSTOM, received.append)
 
     def test_load_model_publishes_model_loaded_on_bus(self, context, bus):
-        import Mercurius
+        import DomusEvents
         received = []
-        bus.subscribe(Mercurius.EventType.MODEL_LOADED, received.append)
+        bus.subscribe(DomusEvents.EventType.MODEL_LOADED, received.append)
 
         context.load_model("mercury")
         bus.stop(drain=True)
@@ -95,9 +95,9 @@ class TestMercuriusBridge:
         assert "mercury" in received[0].payload["message"]
 
     def test_unload_model_publishes_model_unloaded_on_bus(self, context, bus):
-        import Mercurius
+        import DomusEvents
         received = []
-        bus.subscribe(Mercurius.EventType.MODEL_UNLOADED, received.append)
+        bus.subscribe(DomusEvents.EventType.MODEL_UNLOADED, received.append)
 
         context.load_model("mercury")
         context.unload_model("mercury")
@@ -106,9 +106,9 @@ class TestMercuriusBridge:
         assert len(received) == 1
 
     def test_error_events_map_to_bus_error_type(self, context, bus):
-        import Mercurius
+        import DomusEvents
         received = []
-        bus.subscribe(Mercurius.EventType.ERROR, received.append)
+        bus.subscribe(DomusEvents.EventType.ERROR, received.append)
 
         context.log_event(ContextEventType.ERROR, "boom")
         bus.stop(drain=True)
@@ -117,27 +117,27 @@ class TestMercuriusBridge:
         assert received[0].payload["message"] == "boom"
 
     def test_inference_events_publish_as_inference_run(self, context, bus):
-        import Mercurius
+        import DomusEvents
         received = []
-        bus.subscribe(Mercurius.EventType.INFERENCE_RUN, received.append)
+        bus.subscribe(DomusEvents.EventType.INFERENCE_RUN, received.append)
 
         context.record_inference("mercury", tokens_processed=10, latency_ms=1.0)
         bus.stop(drain=True)
 
         assert len(received) == 1
-        assert received[0].type is Mercurius.EventType.INFERENCE_RUN
+        assert received[0].type == DomusEvents.EventType.INFERENCE_RUN
         assert received[0].payload["metadata"]["model_name"] == "mercury"
 
     def test_state_changed_events_publish_as_state_changed(self, context, bus):
-        import Mercurius
+        import DomusEvents
         received = []
-        bus.subscribe(Mercurius.EventType.STATE_CHANGED, received.append)
+        bus.subscribe(DomusEvents.EventType.STATE_CHANGED, received.append)
 
         context.log_event(ContextEventType.STATE_CHANGED, "state changed")
         bus.stop(drain=True)
 
         assert len(received) == 1
-        assert received[0].type is Mercurius.EventType.STATE_CHANGED
+        assert received[0].type == DomusEvents.EventType.STATE_CHANGED
 
     def test_no_bus_means_no_crash(self, context):
         # Root conftest's bus-reset fixtures guarantee no bus is running here.
@@ -235,12 +235,12 @@ class TestMemoryOperations:
                    for e in context.events)
 
     def test_memory_operations_publish_to_bus(self, context):
-        import Mercurius
-        bus = Mercurius.initialize_bus()
+        import DomusEvents
+        bus = DomusEvents.initialize_bus()
         received = []
-        for event_type in (Mercurius.EventType.CONVERSATION_CONDENSED,
-                           Mercurius.EventType.MEMORY_STORED,
-                           Mercurius.EventType.USER_MEMORY_UPDATED):
+        for event_type in (DomusEvents.EventType.CONVERSATION_CONDENSED,
+                           DomusEvents.EventType.MEMORY_STORED,
+                           DomusEvents.EventType.USER_MEMORY_UPDATED):
             bus.subscribe(event_type, received.append)
         try:
             for i in range(12):
@@ -250,13 +250,13 @@ class TestMemoryOperations:
             context.remember_user_fact("k", "v")
         finally:
             bus.stop(drain=True)
-            Mercurius.shutdown_bus(drain=False)
+            DomusEvents.shutdown_bus(drain=False)
 
         published_types = {e.type for e in received}
         assert published_types == {
-            Mercurius.EventType.CONVERSATION_CONDENSED,
-            Mercurius.EventType.MEMORY_STORED,
-            Mercurius.EventType.USER_MEMORY_UPDATED,
+            DomusEvents.EventType.CONVERSATION_CONDENSED,
+            DomusEvents.EventType.MEMORY_STORED,
+            DomusEvents.EventType.USER_MEMORY_UPDATED,
         }
 
 

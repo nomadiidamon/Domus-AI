@@ -24,7 +24,7 @@ from Faber.models import (
 )
 from Faber.messaging import Message, chat as chat_with_model, generate
 from Janus.doctor import full_diagnostic
-from Mercurius import EventType, initialize_bus, publish_event, shutdown_bus
+from DomusEvents import EventType, initialize_bus, publish_event, shutdown_bus
 
 from utils import configure_logging
 

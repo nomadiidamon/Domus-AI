@@ -18,7 +18,7 @@ from typing import Optional, Dict, Any, List, Set
 from dataclasses import dataclass, field, fields, asdict
 from enum import Enum
 import threading
-from Mercurius import EventType, publish_event
+from DomusEvents import EventType, publish_event
 
 from Hestia.hardware import (
     HardwareProfile, HardwareDetector, ModelRecommender, ModelRecommendation,

@@ -232,7 +232,7 @@ def _record_tool_trace(model: str, tool_trace: List[Message]) -> None:
 def _publish(event_type, model: str, message: Message) -> None:
     """Publish a messaging event to the Mercurius bus (no-op without one)."""
     try:
-        from Mercurius import publish_event
+        from DomusEvents import publish_event
         publish_event(
             event_type,
             source="faber",
@@ -262,7 +262,7 @@ def _chat_once(model: str, messages: List[Message], tools: Optional[List[Dict[st
     if tools:
         body["tools"] = tools
 
-    from Mercurius import EventType
+    from DomusEvents import EventType
     for message in messages:
         _publish(EventType.MESSAGE_SENT, model, message)
 
@@ -389,7 +389,7 @@ def generate(
     if system is not None:
         body["system"] = system
 
-    from Mercurius import EventType
+    from DomusEvents import EventType
     outbound = [Message("user", prompt)]
     if system is not None:
         outbound.insert(0, Message("system", system))
