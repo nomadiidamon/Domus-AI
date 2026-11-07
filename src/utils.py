@@ -4,8 +4,8 @@
 """
 utils.py - Shared helpers available to every Domus-AI subsystem equally.
 
-Lives at the project root (a sibling of Hestia, Janus, Mentis, Faber,
-Custos, Mercurius, Lares, DomusAPI) rather than inside any one subsystem,
+Lives at the project root (a sibling of Janus, Mentis, Faber,
+Custos, Lares, DomusAPI) rather than inside any one subsystem,
 since logging configuration and JSON loading are used across all of them
 and none of them is the "owner" of these concerns.
 

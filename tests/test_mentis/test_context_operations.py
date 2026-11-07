@@ -324,6 +324,21 @@ class TestGetMemoryUsage:
 
 
 class TestRefreshHardware:
+    def test_uses_hestia_recommender_with_detected_profile(self, context, monkeypatch, fake_hardware_profile):
+        from Hestia import ModelRecommendation, ModelSize
+
+        monkeypatch.setattr(
+            "Mentis.context.HardwareDetector",
+            lambda: MagicMock(detect=MagicMock(return_value=fake_hardware_profile)),
+        )
+
+        assert context.refresh_hardware() is True
+        assert isinstance(context.model_recommendation, ModelRecommendation)
+        assert context.model_recommendation.model_size == ModelSize.MEDIUM
+        status = context.get_system_status()
+        assert status["hardware"] == fake_hardware_profile.to_dict()
+        assert status["recommendation"]["model_size"] == ModelSize.MEDIUM
+
     def test_updates_profile_on_success(self, context, monkeypatch, fake_hardware_profile):
         monkeypatch.setattr(
             "Mentis.context.HardwareDetector",

@@ -110,7 +110,7 @@ class TestInitShutdown:
 
 class TestHardwareAndModels:
     def test_detect_hardware_delegates(self):
-        with patch("Hestia.hardware.detect_hardware", return_value="profile") as mock_detect:
+        with patch("Hestia.detect_hardware", return_value="profile") as mock_detect:
             assert DomusAPI.detect_hardware() == "profile"
         mock_detect.assert_called_once_with()
 

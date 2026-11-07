@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from Hestia.hardware import HardwareProfile, ModelRecommendation
-from Hestia.types import AcceleratorType, ModelSize
+from Hestia import HardwareProfile, ModelRecommendation
+from Hestia import AcceleratorType, ModelSize
 
 
 @pytest.fixture

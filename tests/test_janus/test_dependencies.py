@@ -86,6 +86,25 @@ class TestPythonPackageDependency:
         result = dep.check()
         assert result.status == DependencyStatus.HEALTHY
 
+    def test_check_rejects_empty_namespace_without_distribution(self, monkeypatch):
+        import sys
+        from types import ModuleType
+
+        monkeypatch.setitem(sys.modules, "fake_namespace", ModuleType("fake_namespace"))
+        dep = PythonPackageDependency("fake-distribution", import_name="fake_namespace", min_version="1.0")
+        assert dep.check().status == DependencyStatus.MISSING
+
+    def test_check_gets_namespace_version_from_distribution(self, monkeypatch):
+        import sys
+        from types import ModuleType
+
+        monkeypatch.setitem(sys.modules, "fake_namespace", ModuleType("fake_namespace"))
+        dep = PythonPackageDependency("fake-distribution", import_name="fake_namespace", min_version="1.0")
+        with patch("importlib.metadata.version", return_value="1.5"):
+            result = dep.check()
+        assert result.status == DependencyStatus.HEALTHY
+        assert result.version == "1.5"
+
     def test_get_install_instructions_with_min_version(self):
         dep = PythonPackageDependency("somepkg", min_version="2.0")
         assert dep.get_install_instructions() == "pip install 'somepkg>=2.0'"
@@ -105,6 +124,18 @@ class TestPythonPackageDependency:
         args = mock_run.call_args[0][0]
         assert args[-1] == "somepkg>=1.5"
         assert "pip" in args
+
+    def test_repair_rechecks_cached_package_in_fresh_process(self, monkeypatch):
+        import sys
+
+        dep = PythonPackageDependency("somepkg", import_name="fake_package", min_version="1.5")
+        cached = MagicMock(__version__="1.0")
+        monkeypatch.setitem(sys.modules, "fake_package", cached)
+        results = [MagicMock(returncode=0), MagicMock(returncode=0, stdout='"1.5"\n')]
+        with patch("subprocess.run", side_effect=results):
+            assert dep.repair()[0] is True
+            assert dep.check().status == DependencyStatus.HEALTHY
+        assert sys.modules["fake_package"] is cached
 
     def test_repair_reports_failure_on_nonzero_exit(self):
         dep = PythonPackageDependency("somepkg")

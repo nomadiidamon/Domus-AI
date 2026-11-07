@@ -3,10 +3,10 @@ conftest.py - Shared pytest configuration and fixtures for the whole suite.
 
 This file is auto-loaded by pytest before any test runs. Its two jobs:
 
-1. Make the project's top-level packages (Hestia, Janus, Mentis, Faber,
+1. Make the project's top-level packages (Janus, Mentis, Faber,
    Custos, DomusEvents, Lares, DomusAPI, utils) importable, the same way
    tests/smoke_test.py did it - by adding src/ to sys.path. Tests then
-   just do `from Hestia.hardware import detect_hardware` etc.
+    import the external Hestia dependency from the installed environment.
 
 2. Provide fixtures shared across every module's tests: an isolated,
    disposable "host project" directory (so nothing a test does ever
@@ -16,7 +16,7 @@ This file is auto-loaded by pytest before any test runs. Its two jobs:
 
 Everything here is intentionally boring - no test *behavior* lives in
 this file, only shared plumbing. Module-specific fixtures belong in each
-module's own conftest.py (e.g. tests/test_hestia/conftest.py).
+module's own conftest.py.
 """
 
 import os
