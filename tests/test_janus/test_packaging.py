@@ -11,9 +11,11 @@ import json
 import subprocess
 import sys
 import zipfile
+from email.parser import BytesParser
 from pathlib import Path
 
 import pytest
+from packaging.requirements import Requirement
 
 from Janus import config, paths
 
@@ -75,7 +77,7 @@ class TestPackagedDataComplete:
 
 
 @pytest.fixture(scope="module")
-def wheel_names(tmp_path_factory):
+def wheel_path(tmp_path_factory):
     out = tmp_path_factory.mktemp("wheel")
     result = subprocess.run(
         [sys.executable, "-m", "pip", "wheel", str(PROJECT_ROOT),
@@ -84,8 +86,13 @@ def wheel_names(tmp_path_factory):
     )
     if result.returncode != 0:
         pytest.skip(f"wheel build unavailable: {result.stderr.strip()[-300:]}")
-    wheel = next(out.glob("domus_ai-*.whl"))
-    return set(zipfile.ZipFile(wheel).namelist())
+    return next(out.glob("domus_ai-*.whl"))
+
+
+@pytest.fixture(scope="module")
+def wheel_names(wheel_path):
+    with zipfile.ZipFile(wheel_path) as wheel:
+        return set(wheel.namelist())
 
 
 @pytest.mark.slow
@@ -107,3 +114,14 @@ class TestBuiltWheel:
 
     def test_wheel_has_no_top_level_mcp(self, wheel_names):
         assert not any(n.startswith("mcp/") for n in wheel_names)
+
+    def test_wheel_depends_on_external_hestia(self, wheel_path, wheel_names):
+        assert not any(name.startswith("Hestia/") for name in wheel_names)
+        metadata_name = next(name for name in wheel_names if name.endswith(".dist-info/METADATA"))
+        with zipfile.ZipFile(wheel_path) as wheel:
+            metadata = BytesParser().parsebytes(wheel.read(metadata_name))
+        requirements = [Requirement(value) for value in metadata.get_all("Requires-Dist", [])]
+        assert all(requirement.name != "psutil" for requirement in requirements)
+        hestia = next(requirement for requirement in requirements if requirement.name == "hestia-system")
+        assert "0.2.0" in hestia.specifier
+        assert "0.1.0" not in hestia.specifier

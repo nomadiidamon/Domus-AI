@@ -23,9 +23,15 @@ class TestBuildChecker:
     def test_registers_expected_dependency_names(self):
         checker = doctor._build_checker()
         assert set(checker.dependencies.keys()) == {
-            "psutil", "packaging", "python-dotenv", "nvidia-ml-py", "mercurius-events",
+            "packaging", "python-dotenv", "nvidia-ml-py", "mercurius-events", "hestia-system",
             "python", "ollama", "git", "claude",
         }
+
+    def test_hestia_uses_distribution_and_import_names(self):
+        dep = doctor._build_checker().dependencies["hestia-system"]
+        assert dep.import_name == "Hestia"
+        assert dep.min_version == "0.2.0"
+        assert dep.required is True
 
     def test_claude_is_optional(self):
         checker = doctor._build_checker()

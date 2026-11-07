@@ -18,7 +18,7 @@ Subsystem responsibilities, public APIs, usage examples, and implementation stat
 | Subsystem | Responsibility                                                  | API documentation |
 | --------- | --------------------------------------------------------------- | ----------------- |
 | DomusAPI  | Stable package-level Python API.                                | [DomusAPI API](src/DomusAPI/DomusAPI_Doc.md)        |
-| Hestia    | Hardware detection and model recommendations.                   | [Hestia API](src/Hestia/HestiaAPI_Doc.md)           |
+| Hestia    | External package for system discovery, hardware and software analysis, and AI model recommendations. | [Hestia documentation](https://nomadiidamon.github.io/Hestia/index.html) |
 | Janus     | CLI, configuration, diagnostics, paths, and runtime lifecycle.  | [Janus API](src/Janus/JanusAPI_Doc.md)              |
 | DomusEvents | Domus event vocabulary and process-wide bus over the [Mercurius](https://github.com/nomadiidamon/Mercurius) package. | [Mercurius docs](https://nomadiidamon.github.io/Mercurius/PythonAPI.html) |
 | Custos    | MCP permissions, client, and confirmation boundaries.           | [Custos API](src/Custos/CustosAPI_Doc.md)           |
@@ -37,11 +37,11 @@ The MCP server implementations and their bundled configuration are under [src/Do
 - Git: Required by the runtime and its Git MCP integration; see the [Custos API](src/Custos/CustosAPI_Doc.md). bash should also be added to your Path (can lead to test failures if not present).
 
 ### Required Python Packages
-- psutil: v5.9.0 (or greater) for CPU, RAM, and GPU usage monitoring
 - packaging: v23.0 (or greater) for version comparison in dependency checks
 - python-dotenv: v1.0 (or greater) for .env file support
 - nvidia-ml-py: v12.0.0 (or greater), required package dependency and used for NVIDIA GPU monitoring
-- mercurius-events: v0.5.1 (or greater) for the queue-based pub/sub event bus
+- mercurius-events: v0.5.1 (or greater) for the queue-based pub/sub event bus; imported as `Mercurius`. See the [Mercurius repository](https://github.com/nomadiidamon/Mercurius).
+- hestia-system: v0.2.0 (or greater) for hardware discovery and model recommendations; imported as `Hestia`. See the [Hestia repository](https://github.com/nomadiidamon/Hestia).
 
 ### Optional Dependencies
 - Claude Code: For Claude models, or direct integration with Claude Code's CLI if desired.
@@ -63,7 +63,7 @@ ollama --version
 ```
 
 ### 3. Run the installer
-The installer checks for required tools (Python, Git, Ollama) and Python packages (`psutil`, `packaging`, `python-dotenv`, `nvidia-ml-py`), and attempts to auto-repair anything missing (e.g. installing missing Python packages via pip):
+The installer checks for required tools (Python, Git, Ollama) and Python packages (`packaging`, `python-dotenv`, `nvidia-ml-py`, `mercurius-events`, `hestia-system`), and attempts to auto-repair anything missing (e.g. installing missing Python packages via pip):
 ```bash
 python install.py
 ```

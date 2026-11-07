@@ -115,7 +115,7 @@ def get_context():
 # ---------------------------------------------------------------------------
 def detect_hardware():
     """Detect and return the system's HardwareProfile (via Hestia)."""
-    from Hestia.hardware import detect_hardware as _detect
+    from Hestia import detect_hardware as _detect
     return _detect()
 
 

@@ -149,9 +149,9 @@ class TestHandleStop:
 class TestHandleStatus:
     def test_prints_no_active_sessions_when_empty(self, capsys):
         with patch("Janus.main.get_status", return_value=[]), \
-             patch("Hestia.hardware.detect_hardware", return_value=MagicMock()), \
-             patch("Hestia.hardware.recommend_model", return_value=MagicMock()), \
-             patch("Hestia.hardware.print_hardware_report"):
+             patch("Hestia.detect_hardware", return_value=MagicMock()), \
+             patch("Hestia.recommend_model", return_value=MagicMock()), \
+             patch("Hestia.print_hardware_report"):
             main.handle_status()
         captured = capsys.readouterr()
         assert "No active sessions" in captured.out
@@ -162,9 +162,9 @@ class TestHandleStatus:
             "pid": 123, "started": "2026-01-01T00:00:00",
         }]
         with patch("Janus.main.get_status", return_value=sessions), \
-             patch("Hestia.hardware.detect_hardware", return_value=MagicMock()), \
-             patch("Hestia.hardware.recommend_model", return_value=MagicMock()), \
-             patch("Hestia.hardware.print_hardware_report"):
+             patch("Hestia.detect_hardware", return_value=MagicMock()), \
+             patch("Hestia.recommend_model", return_value=MagicMock()), \
+             patch("Hestia.print_hardware_report"):
             main.handle_status()
         captured = capsys.readouterr()
         assert "mercury" in captured.out
@@ -172,7 +172,7 @@ class TestHandleStatus:
 
     def test_does_not_raise_when_hardware_report_fails(self):
         with patch("Janus.main.get_status", return_value=[]), \
-             patch("Hestia.hardware.detect_hardware", side_effect=RuntimeError("boom")):
+             patch("Hestia.detect_hardware", side_effect=RuntimeError("boom")):
             main.handle_status()  # must not raise
 
 

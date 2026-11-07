@@ -23,7 +23,7 @@ import shutil
 import traceback
 from pathlib import Path
 
-# Make the project's top-level packages (Hestia, Janus, Mentis, Faber,
+# Make the project's top-level packages (Janus, Mentis, Faber,
 # Custos, DomusEvents, Lares, DomusAPI, utils) importable regardless of
 # where this script is invoked from, by adding src/ to sys.path - that's
 # where all of them actually live. Each subpackage has its own __init__.py
@@ -108,15 +108,16 @@ def check_config_loads():
 
 
 def check_hardware_detection():
-    from Hestia.hardware import detect_hardware
+    from Hestia import detect_hardware
     profile = detect_hardware()
     assert profile is not None
-    return f"accelerator={getattr(profile, 'accelerator', '?')}"
+    return f"accelerator={profile.primary_accelerator.value}"
 
 
 def check_model_catalog_import():
-    import Hestia.model_catalog  # noqa: F401
-    return "imported ok"
+    from Hestia import AcceleratorType, ModelSize, get_model_info
+    assert get_model_info(AcceleratorType.NONE, ModelSize.MEDIUM) is not None
+    return "catalog lookup ok"
 
 
 def check_session_lifecycle():
@@ -177,10 +178,10 @@ def check_dependencies_module():
     from Janus.dependencies import DependencyChecker, PythonPackageDependency
     checker = DependencyChecker()
     checker.register_many([
-        PythonPackageDependency("psutil", required=True, description="System monitoring"),
+        PythonPackageDependency("hestia-system", import_name="Hestia", required=True),
     ])
     results = checker.check_all()
-    assert "psutil" in results
+    assert results["hestia-system"].is_healthy
     return f"checked {len(results)} dependency record(s)"
 
 
@@ -283,7 +284,7 @@ def check_cli_module_imports():
     suspects = ["cache", "logs", "models", "memory", "config", "sessions", ".ai-runtime"]
     subsystem_dirs = [
         SRC_DIR / name
-        for name in ("Hestia", "Janus", "Mentis", "Faber", "Custos", "DomusEvents", "Lares", "DomusAPI")
+        for name in ("Janus", "Mentis", "Faber", "Custos", "DomusEvents", "Lares", "DomusAPI")
     ]
     leaked = []
     for base in [PROJECT_ROOT, *subsystem_dirs]:
@@ -312,8 +313,8 @@ CORE_CHECKS = [
     ("Janus.paths.find_root", check_paths_resolve),
     ("Janus.config.* loads config/*.json", check_config_loads),
     ("utils.configure_logging / load_json", check_utils_module),
-    ("Hestia.hardware.detect_hardware", check_hardware_detection),
-    ("Hestia.model_catalog imports", check_model_catalog_import),
+    ("Hestia.detect_hardware", check_hardware_detection),
+    ("Hestia.get_model_info", check_model_catalog_import),
     ("Janus.dependencies.DependencyChecker", check_dependencies_module),
     ("Faber.session create/get/stop cycle", check_session_lifecycle),
     ("Mentis.context module imports", check_context_module),

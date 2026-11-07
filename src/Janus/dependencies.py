@@ -7,6 +7,8 @@ Designed to work with doctor.py for comprehensive system diagnostics.
 
 import os
 import sys
+import importlib
+import importlib.metadata
 import subprocess
 import logging
 from abc import ABC, abstractmethod
@@ -171,13 +173,32 @@ class PythonPackageDependency(Dependency):
         self.import_name = import_name or package_name
         self.min_version = min_version
         self.max_version = max_version
+        self._check_in_fresh_process = False
     
     def check(self) -> DependencyCheckResult:
         """Check if Python package is installed."""
         try:
-            # Try to import the package
-            module = __import__(self.import_name)
-            version = self._get_version(module)
+            if self._check_in_fresh_process:
+                result = subprocess.run(
+                    [sys.executable, "-c",
+                     "import importlib, json, sys; "
+                     "module = importlib.import_module(sys.argv[1]); "
+                     "print(json.dumps(next((str(getattr(module, name)) for name in "
+                     "('__version__', 'VERSION', 'version') if hasattr(module, name)), 'unknown')))",
+                     self.import_name],
+                    capture_output=True, text=True, timeout=30,
+                )
+                if result.returncode != 0:
+                    raise ImportError(result.stderr.strip())
+                version = json.loads(result.stdout.strip().splitlines()[-1])
+            else:
+                module = __import__(self.import_name)
+                version = self._get_version(module)
+                if version == "unknown" and getattr(module, "__file__", None) is None:
+                    try:
+                        version = importlib.metadata.version(self.package_name)
+                    except importlib.metadata.PackageNotFoundError:
+                        raise ImportError(self.import_name)
             
             # Check version constraints
             status = DependencyStatus.HEALTHY
@@ -234,6 +255,8 @@ class PythonPackageDependency(Dependency):
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
             
             if result.returncode == 0:
+                importlib.invalidate_caches()
+                self._check_in_fresh_process = self.import_name in sys.modules
                 self.logger.info(f"Successfully installed {self.package_name}")
                 return True, f"Installed {self.package_name}"
             else:

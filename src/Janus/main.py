@@ -162,7 +162,7 @@ def handle_stop(args: list) -> None:
 
 def handle_status() -> None:
     """Handle the 'status' command."""
-    from Hestia.hardware import print_hardware_report
+    from Hestia import print_hardware_report
 
     sessions = get_status()
 
@@ -192,7 +192,7 @@ Started: {session['started']}
             ctx.refresh_hardware()
             print_hardware_report(ctx.hardware_profile, ctx.model_recommendation)
         else:
-            from Hestia.hardware import detect_hardware, recommend_model
+            from Hestia import detect_hardware, recommend_model
             profile = detect_hardware()
             print_hardware_report(profile, recommend_model(profile))
 

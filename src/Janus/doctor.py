@@ -25,10 +25,11 @@ def _build_checker() -> DependencyChecker:
     checker.register_many([
         # Python packages
         PythonPackageDependency(
-            "psutil",
-            min_version="5.9.0",
+            "hestia-system",
+            import_name="Hestia",
+            min_version="0.2.0",
             required=True,
-            description="CPU, RAM, and process monitoring",
+            description="System discovery, hardware and software analysis, and AI model recommendations",
         ),
         PythonPackageDependency(
             "packaging",

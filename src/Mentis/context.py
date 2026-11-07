@@ -20,7 +20,7 @@ from enum import Enum
 import threading
 from DomusEvents import EventType, publish_event
 
-from Hestia.hardware import (
+from Hestia import (
     HardwareProfile, HardwareDetector, ModelRecommender, ModelRecommendation,
     AcceleratorType, ModelSize
 )
