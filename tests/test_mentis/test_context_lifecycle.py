@@ -78,6 +78,32 @@ class TestStartup:
     def test_startup_sets_model_recommendation(self, started_context, fake_model_recommendation):
         assert started_context.model_recommendation is fake_model_recommendation
 
+    def test_startup_passes_recommendation_weight(
+        self, host_project_dir, fake_hardware_profile, fake_model_recommendation, monkeypatch,
+    ):
+        from unittest.mock import MagicMock
+        from Hestia.models import ModelRecommendationWeight
+        from Mentis.context import RuntimeContext
+
+        weight = ModelRecommendationWeight(
+            max_memory_gb=6, max_parameters_billions=8,
+            include_capabilities={"tools"}, exclude_capabilities={"vision"},
+            include_families={"qwen3"},
+        )
+        monkeypatch.setattr(
+            "Mentis.context.HardwareDetector",
+            lambda: MagicMock(detect=MagicMock(return_value=fake_hardware_profile)),
+        )
+        recommender = MagicMock(return_value=MagicMock(
+            recommend=MagicMock(return_value=fake_model_recommendation),
+        ))
+        monkeypatch.setattr("Mentis.context.ModelRecommender", recommender)
+        context = RuntimeContext(recommendation_weight=weight)
+
+        assert context.startup(suggested_host=host_project_dir, non_interactive=True)
+        recommender.assert_called_once_with(fake_hardware_profile, weight=weight)
+        assert context.model_recommendation is fake_model_recommendation
+
     def test_startup_records_startup_event(self, started_context):
         from Mentis.context import ContextEventType
         assert any(e.event_type == ContextEventType.STARTUP for e in started_context.events)

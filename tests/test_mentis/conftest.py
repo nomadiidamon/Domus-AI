@@ -61,7 +61,7 @@ def started_context(context, host_project_dir, fake_hardware_profile, fake_model
     )
     monkeypatch.setattr(
         "Mentis.context.ModelRecommender",
-        lambda profile: MagicMock(recommend=MagicMock(return_value=fake_model_recommendation)),
+        lambda profile, weight=None: MagicMock(recommend=MagicMock(return_value=fake_model_recommendation)),
     )
 
     ok = context.startup(suggested_host=host_project_dir, non_interactive=True)

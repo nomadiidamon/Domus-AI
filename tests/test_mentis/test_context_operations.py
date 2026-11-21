@@ -324,6 +324,28 @@ class TestGetMemoryUsage:
 
 
 class TestRefreshHardware:
+    def test_initializer_preserves_recommendation_weight(self):
+        from Hestia.models import ModelRecommendationWeight
+        from Mentis.context import initialize_context
+
+        weight = ModelRecommendationWeight(max_memory_gb=6, include_capabilities={"tools"})
+        assert initialize_context(recommendation_weight=weight).recommendation_weight is weight
+
+    def test_passes_weight_to_hestia_recommender(self, monkeypatch, fake_hardware_profile):
+        from Hestia.models import ModelRecommendationWeight
+        from Mentis.context import RuntimeContext
+
+        weight = ModelRecommendationWeight(max_memory_gb=2, include_capabilities={"tools"})
+        context = RuntimeContext(recommendation_weight=weight)
+        monkeypatch.setattr(
+            "Mentis.context.HardwareDetector",
+            lambda: MagicMock(detect=MagicMock(return_value=fake_hardware_profile)),
+        )
+
+        assert context.refresh_hardware()
+        assert context.model_recommendation.model_size.value == "small"
+        assert not context.model_recommendation.vision_models
+
     def test_uses_hestia_recommender_with_detected_profile(self, context, monkeypatch, fake_hardware_profile):
         from Hestia import ModelRecommendation, ModelSize
 
@@ -346,7 +368,7 @@ class TestRefreshHardware:
         )
         monkeypatch.setattr(
             "Mentis.context.ModelRecommender",
-            lambda profile: MagicMock(recommend=MagicMock(return_value=MagicMock())),
+            lambda profile, weight=None: MagicMock(recommend=MagicMock(return_value=MagicMock())),
         )
 
         result = context.refresh_hardware()
@@ -379,7 +401,7 @@ class TestRefreshHardware:
         )
         monkeypatch.setattr(
             "Mentis.context.ModelRecommender",
-            lambda profile: MagicMock(recommend=MagicMock(return_value=MagicMock())),
+            lambda profile, weight=None: MagicMock(recommend=MagicMock(return_value=MagicMock())),
         )
 
         context.refresh_hardware()

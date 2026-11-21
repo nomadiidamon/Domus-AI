@@ -6,6 +6,8 @@ The memory and mind of the Domus environment. Mentis provides `RuntimeContext`, 
 
 Construct `RuntimeContext(project_name="DefaultProject", project_dir=None, mode=RuntimeMode.DEVELOPMENT)`. `project_dir` is advisory until startup resolves the confirmed host root.
 
+Pass an optional Hestia `ModelRecommendationWeight` as `recommendation_weight` to constrain recommendations at startup and on `refresh_hardware()`. The weight can specify memory, tier, parameter, capability, and family constraints; Hestia applies them to the detected hardware profile. The default `None` leaves recommendations unconstrained. Set `context.recommendation_weight` and refresh to apply a different weight. Weights are runtime-only and are not saved with project configuration.
+
 - `startup(suggested_host=None, non_interactive=False) -> bool` initializes the context. Interactive mode may prompt for host confirmation; non-interactive mode accepts the suggestion/current directory without prompting.
 - `shutdown() -> bool` marks the context stopped and persists config, AIMemory, and event state.
 - `refresh_hardware() -> bool` refreshes the cached Hestia hardware profile and recommendation.
@@ -31,14 +33,16 @@ RuntimeContext wrappers for condensing, notes, and facts also log memory events.
 
 Mentis uses the canonical `DomusEvents.EventType` (a `str` enum) for `ContextEvent.event_type` and `RuntimeContext.log_event()`. `ContextEventType` remains exported from Mentis as a compatibility alias to that same enum, so `ContextEventType is DomusEvents.EventType`. Mentis emits context events including `INFERENCE_RUN` and `STATE_CHANGED`, which are also first-class bus event types; there is no separate Mentis event enum or translation map. `ContextEvent.to_dict()` serializes the shared enum's string value along with its message and metadata.
 
-`get_context()` returns the process-wide context, creating an in-memory `RuntimeContext` if absent; it does not call `startup()`. `initialize_context(project_name, project_dir=None, mode=...)` replaces the global context with a new in-memory instance and likewise does not start it. For the combined, non-interactive library lifecycle use [DomusAPI](../DomusAPI/DomusAPI_Doc.md).
+`get_context()` returns the process-wide context, creating an in-memory `RuntimeContext` if absent; it does not call `startup()`. `initialize_context(project_name, project_dir=None, mode=..., recommendation_weight=None)` replaces the global context with a new in-memory instance and likewise does not start it. For the combined, non-interactive library lifecycle use [DomusAPI](../DomusAPI/DomusAPI_Doc.md).
 
 ## Example
 
 ```python
+from Hestia.models import ModelRecommendationWeight
 from Mentis import RuntimeContext
 
-context = RuntimeContext(project_name="Example")
+weight = ModelRecommendationWeight(max_memory_gb=6, include_capabilities={"tools"})
+context = RuntimeContext(project_name="Example", recommendation_weight=weight)
 if context.startup(suggested_host="."):
 	context.update_ai_memory("user", "Prefer concise responses")
 	context.store_conversation_note("Project uses pytest")
