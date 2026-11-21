@@ -1,155 +1,164 @@
-"""
-Tests for Janus/installer.py
+"""Tests for the Hestia-backed Domus installer."""
 
-check_and_repair()/run_install() drive a real DependencyChecker built by
-_build_checker() against real dependency objects - but we swap in a
-DependencyChecker whose registered dependencies are small fakes (same
-approach as test_dependencies.py's TestDependencyChecker), so nothing
-here actually probes real system packages or shells out to pip/apt/brew.
-"""
-
+import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from Hestia.software.dependency import (
+    CheckResult, Dependency, DependencyKind, DependencyRegistry, DependencyStatus,
+)
+from Hestia.software.installer import InstallOutcome
 
 from Janus import installer
-from Janus.dependencies import DependencyChecker, Dependency, DependencyType, DependencyStatus, DependencyCheckResult
 
 pytestmark = pytest.mark.janus
 
 
-class _FakeDependency(Dependency):
-    def __init__(self, name, status, required=True, repair_success=True):
-        super().__init__(name=name, dep_type=DependencyType.PYTHON_PACKAGE, required=required)
-        self._status = status
-        self._repair_success = repair_success
-
-    def check(self):
-        return DependencyCheckResult(name=self.name, dep_type=self.dep_type, status=self._status, version="1.0")
-
-    def repair(self):
-        if self._repair_success:
-            self._status = DependencyStatus.HEALTHY
-            return True, f"repaired {self.name}"
-        return False, f"could not repair {self.name}"
-
-    def get_install_instructions(self):
-        return f"install {self.name} manually"
+def make_registry(state, required=True, kind=DependencyKind.PYTHON_PACKAGE):
+    registry = DependencyRegistry()
+    registry.register(Dependency(
+        "example", lambda: CheckResult(state["status"], "example status", version="1.0"),
+        kind, required, ">=1.0" if kind == DependencyKind.PYTHON_PACKAGE else None,
+    ))
+    return registry
 
 
-def _checker_with(*deps):
-    checker = DependencyChecker()
-    checker.register_many(list(deps))
-    return checker
+def test_shared_registry_contains_runtime_requirements():
+    results = installer._build_checker().check_all()
+    assert set(results) == {
+        "packaging", "python-dotenv", "nvidia-ml-py", "mercurius-events", "hestia-system",
+        "python", "ollama", "git", "claude",
+    }
+    assert results["hestia-system"].version_specifier == ">=0.5.0"
+    assert not results["claude"].required
 
 
-class TestBuildChecker:
-    def test_registers_expected_dependency_names(self):
-        checker = installer._build_checker()
-        assert set(checker.dependencies.keys()) == {
-            "packaging", "python-dotenv", "nvidia-ml-py", "mercurius-events", "hestia-system",
-            "python", "ollama", "git", "claude",
-        }
-
-    def test_hestia_uses_distribution_and_import_names(self):
-        dep = installer._build_checker().dependencies["hestia-system"]
-        assert dep.import_name == "Hestia"
-        assert dep.min_version == "0.2.0"
-        assert dep.required is True
-
-    def test_claude_is_optional_others_required(self):
-        checker = installer._build_checker()
-        for name, dep in checker.dependencies.items():
-            if name == "claude":
-                assert dep.required is False
-            else:
-                assert dep.required is True
+@pytest.mark.parametrize("version, expected", [
+    ("Python 3.10.0", DependencyStatus.SATISFIED),
+    ("Python 3.9.9", DependencyStatus.INCOMPATIBLE),
+])
+def test_python_command_version_is_checked(version, expected):
+    with patch("Hestia.software.dependency.checks.shutil.which", return_value="/python"), \
+         patch("Hestia.software.dependency.checks.subprocess.run") as run:
+        run.return_value.returncode = 0
+        run.return_value.stdout = version
+        run.return_value.stderr = ""
+        result = installer._build_checker().check("python")
+    assert result.status == expected
+    assert run.call_args.args[0] == ["/python", "--version"]
 
 
-class TestAllRequiredSatisfied:
-    def test_true_when_all_required_healthy(self):
-        checker = _checker_with(
-            _FakeDependency("required1", DependencyStatus.HEALTHY),
-            _FakeDependency("optional1", DependencyStatus.MISSING, required=False),
-        )
-        results = checker.check_all()
-        assert installer._all_required_satisfied(checker, results) is True
-
-    def test_false_when_a_required_dep_unhealthy(self):
-        checker = _checker_with(
-            _FakeDependency("required1", DependencyStatus.MISSING),
-        )
-        results = checker.check_all()
-        assert installer._all_required_satisfied(checker, results) is False
-
-
-class TestCheckAndRepair:
-    def test_returns_true_without_repair_when_everything_already_healthy(self):
-        checker = _checker_with(_FakeDependency("a", DependencyStatus.HEALTHY))
-
-        with patch("Janus.installer._build_checker", return_value=checker):
-            all_ok, results = installer.check_and_repair(auto_repair=True)
-
-        assert all_ok is True
-        assert results["a"].status == DependencyStatus.HEALTHY
-
-    def test_attempts_repair_on_missing_required_dep(self):
-        dep = _FakeDependency("a", DependencyStatus.MISSING, repair_success=True)
-        checker = _checker_with(dep)
-
-        with patch("Janus.installer._build_checker", return_value=checker):
-            all_ok, results = installer.check_and_repair(auto_repair=True)
-
-        # After repair, _FakeDependency flips itself to HEALTHY and the
-        # re-check (checker.check_all() called again inside
-        # check_and_repair) should reflect that.
-        assert all_ok is True
-        assert results["a"].status == DependencyStatus.HEALTHY
-
-    def test_skips_repair_when_auto_repair_false(self):
-        dep = _FakeDependency("a", DependencyStatus.MISSING, repair_success=True)
-        checker = _checker_with(dep)
-
-        with patch("Janus.installer._build_checker", return_value=checker):
-            all_ok, results = installer.check_and_repair(auto_repair=False)
-
-        # Dependency was never repaired, so it's still reported unhealthy.
-        assert all_ok is False
-        assert results["a"].status == DependencyStatus.MISSING
-
-    def test_returns_false_when_repair_fails_for_required_dep(self):
-        dep = _FakeDependency("a", DependencyStatus.MISSING, repair_success=False)
-        checker = _checker_with(dep)
-
-        with patch("Janus.installer._build_checker", return_value=checker):
-            all_ok, results = installer.check_and_repair(auto_repair=True)
-
-        assert all_ok is False
-
-    def test_optional_dep_failure_does_not_block_success(self):
-        checker = _checker_with(
-            _FakeDependency("required1", DependencyStatus.HEALTHY),
-            _FakeDependency("optional1", DependencyStatus.MISSING, required=False, repair_success=False),
-        )
-
-        with patch("Janus.installer._build_checker", return_value=checker):
-            all_ok, results = installer.check_and_repair(auto_repair=True)
-
-        assert all_ok is True
+@pytest.mark.parametrize("command, output, version", [
+    ("ollama", "ollama version is 0.12.3", "0.12.3"),
+    ("git", "git version 2.49.0", "2.49.0"),
+])
+def test_system_command_version_is_reported(command, output, version):
+    with patch("Hestia.software.dependency.checks.shutil.which", return_value=f"/{command}"), \
+         patch("Hestia.software.dependency.checks.subprocess.run") as run:
+        run.return_value.returncode = 0
+        run.return_value.stdout = output
+        run.return_value.stderr = ""
+        result = installer._build_checker().check(command)
+    assert result.status == DependencyStatus.SATISFIED
+    assert result.version == version
+    assert run.call_args.args[0] == [f"/{command}", "--version"]
 
 
-class TestRunInstall:
-    def test_returns_true_when_check_and_repair_succeeds(self):
-        with patch("Janus.installer.check_and_repair", return_value=(True, {})):
-            result = installer.run_install()
-        assert result is True
+def test_check_only_does_not_run_backend():
+    registry = make_registry({"status": DependencyStatus.MISSING})
+    with patch.object(installer, "_build_checker", return_value=registry), \
+         patch.object(installer.PipBackend, "install") as install:
+        success, results = installer.check_and_repair(auto_repair=False)
+    assert not success
+    assert not results["example"].is_satisfied
+    install.assert_not_called()
 
-    def test_returns_false_when_check_and_repair_fails(self):
-        with patch("Janus.installer.check_and_repair", return_value=(False, {})):
-            result = installer.run_install()
-        assert result is False
 
-    def test_passes_through_auto_repair_flag(self):
-        with patch("Janus.installer.check_and_repair", return_value=(True, {})) as mock_check:
-            installer.run_install(auto_repair=False)
-        mock_check.assert_called_once_with(auto_repair=False)
+def test_repair_uses_hestia_plan_and_rechecks():
+    state = {"status": DependencyStatus.MISSING}
+    registry = make_registry(state)
+
+    def install(request, *, timeout_seconds, report_progress):
+        assert request.target == "example>=1.0"
+        assert timeout_seconds > 0
+        state["status"] = DependencyStatus.SATISFIED
+        return InstallOutcome(True, "installed")
+
+    with patch.object(installer, "_build_checker", return_value=registry), \
+         patch.object(installer.PipBackend, "install", side_effect=install) as backend:
+        success, results = installer.check_and_repair()
+    assert success
+    assert results["example"].is_satisfied
+    backend.assert_called_once()
+
+
+def test_failed_action_is_not_hidden_by_successful_recheck():
+    state = {"status": DependencyStatus.MISSING}
+    registry = make_registry(state)
+
+    def install(request, *, timeout_seconds, report_progress):
+        state["status"] = DependencyStatus.SATISFIED
+        return InstallOutcome(False, "failed")
+
+    with patch.object(installer, "_build_checker", return_value=registry), \
+         patch.object(installer.PipBackend, "install", side_effect=install):
+        success, results = installer.check_and_repair()
+    assert not success
+    assert results["example"].is_satisfied
+
+
+def test_missing_optional_command_does_not_trigger_install_or_fail():
+    registry = make_registry({"status": DependencyStatus.MISSING}, required=False, kind=DependencyKind.SYSTEM_COMMAND)
+    with patch.object(installer, "_build_checker", return_value=registry), \
+         patch.object(installer.PipBackend, "install") as install:
+        success, _ = installer.check_and_repair()
+    assert success
+    install.assert_not_called()
+
+
+def test_missing_required_command_fails_without_installing():
+    registry = make_registry({"status": DependencyStatus.MISSING}, kind=DependencyKind.SYSTEM_COMMAND)
+    with patch.object(installer, "_build_checker", return_value=registry), \
+         patch.object(installer.PipBackend, "install") as install:
+        success, _ = installer.check_and_repair()
+    assert not success
+    install.assert_not_called()
+
+
+def test_pip_backend_uses_interpreter_and_timeout():
+    request = installer.InstallRequest("id", "group", "example", "pip", "example>=1")
+    with patch.object(installer.subprocess, "run") as run:
+        run.return_value.returncode = 0
+        outcome = installer.PipBackend().install(request, timeout_seconds=4, report_progress=lambda *_: None)
+    assert outcome.succeeded
+    run.assert_called_once_with(
+        [installer.sys.executable, "-m", "pip", "install", "--upgrade", "example>=1"],
+        capture_output=True, text=True, timeout=4,
+    )
+
+
+def test_pip_timeout_is_reported_by_hestia():
+    registry = make_registry({"status": DependencyStatus.MISSING})
+    with patch.object(installer, "_build_checker", return_value=registry), \
+         patch.object(installer.subprocess, "run", side_effect=subprocess.TimeoutExpired("pip", 4)):
+        success, results = installer.check_and_repair()
+    assert not success
+    assert not results["example"].is_satisfied
+
+
+def test_standalone_installer_explains_missing_hestia():
+    script = Path(__file__).resolve().parents[2] / "install.py"
+    result = subprocess.run(
+        [sys.executable, "-S", str(script), "--check-only"],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 1
+    assert 'python -m pip install "hestia-system>=0.5.0"' in result.stderr
+
+
+def test_run_install_passes_repair_flag():
+    with patch.object(installer, "check_and_repair", return_value=(True, {})) as check:
+        assert installer.run_install(auto_repair=False)
+    check.assert_called_once_with(auto_repair=False)

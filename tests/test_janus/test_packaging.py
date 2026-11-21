@@ -8,6 +8,7 @@ LOCAL_AI_RUNTIME_ROOT overrides it. These tests cover the default branch
 """
 
 import json
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -79,8 +80,15 @@ class TestPackagedDataComplete:
 @pytest.fixture(scope="module")
 def wheel_path(tmp_path_factory):
     out = tmp_path_factory.mktemp("wheel")
+    source = tmp_path_factory.mktemp("wheel-source")
+    shutil.copytree(
+        PROJECT_ROOT / "src", source / "src",
+        ignore=shutil.ignore_patterns("__pycache__", "*.egg-info", "*.pyc"),
+    )
+    shutil.copy2(PROJECT_ROOT / "pyproject.toml", source)
+    shutil.copy2(PROJECT_ROOT / "README.md", source)
     result = subprocess.run(
-        [sys.executable, "-m", "pip", "wheel", str(PROJECT_ROOT),
+        [sys.executable, "-m", "pip", "wheel", str(source),
          "--no-deps", "-w", str(out), "-q"],
         capture_output=True, text=True,
     )
@@ -117,11 +125,14 @@ class TestBuiltWheel:
 
     def test_wheel_depends_on_external_hestia(self, wheel_path, wheel_names):
         assert not any(name.startswith("Hestia/") for name in wheel_names)
+        assert "Janus/requirements.py" in wheel_names
+        assert "Janus/dependencies.py" not in wheel_names
         metadata_name = next(name for name in wheel_names if name.endswith(".dist-info/METADATA"))
         with zipfile.ZipFile(wheel_path) as wheel:
             metadata = BytesParser().parsebytes(wheel.read(metadata_name))
         requirements = [Requirement(value) for value in metadata.get_all("Requires-Dist", [])]
         assert all(requirement.name != "psutil" for requirement in requirements)
         hestia = next(requirement for requirement in requirements if requirement.name == "hestia-system")
-        assert "0.2.0" in hestia.specifier
+        assert "0.5.0" in hestia.specifier
+        assert "0.2.0" not in hestia.specifier
         assert "0.1.0" not in hestia.specifier

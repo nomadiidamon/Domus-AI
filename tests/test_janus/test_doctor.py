@@ -1,8 +1,7 @@
 """
 Tests for Janus/doctor.py
 
-doctor.py orchestrates DependencyChecker (already covered by
-test_dependencies.py), an HTTP health check against a local Ollama
+doctor.py orchestrates Hestia dependency reports, an HTTP health check against a local Ollama
 server, an `ollama list` subprocess call, and MCP config file reading.
 Every external touchpoint (urllib, subprocess, the dependency checker
 itself) is mocked so these tests never depend on Ollama, git, or any
@@ -14,6 +13,9 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+from Hestia.software.dependency import (
+    CheckResult, CustomDependency, DependencyRegistry, DependencyStatus,
+)
 from Janus import doctor
 
 pytestmark = pytest.mark.janus
@@ -21,36 +23,37 @@ pytestmark = pytest.mark.janus
 
 class TestBuildChecker:
     def test_registers_expected_dependency_names(self):
-        checker = doctor._build_checker()
-        assert set(checker.dependencies.keys()) == {
+        results = doctor._build_checker().check_all()
+        assert set(results) == {
             "packaging", "python-dotenv", "nvidia-ml-py", "mercurius-events", "hestia-system",
             "python", "ollama", "git", "claude",
         }
 
-    def test_hestia_uses_distribution_and_import_names(self):
-        dep = doctor._build_checker().dependencies["hestia-system"]
-        assert dep.import_name == "Hestia"
-        assert dep.min_version == "0.2.0"
+    def test_hestia_uses_required_distribution_version(self):
+        dep = doctor._build_checker().check("hestia-system")
+        assert dep.version_specifier == ">=0.5.0"
         assert dep.required is True
 
     def test_claude_is_optional(self):
         checker = doctor._build_checker()
-        assert checker.dependencies["claude"].required is False
+        assert checker.check("claude").required is False
 
     def test_git_is_required(self):
         checker = doctor._build_checker()
-        assert checker.dependencies["git"].required is True
+        assert checker.check("git").required is True
 
 
 class TestCheckDependencies:
+    @staticmethod
+    def make_registry(name, status, required=True):
+        registry = DependencyRegistry()
+        registry.register(CustomDependency(
+            name, lambda: CheckResult(status, status.value), required=required,
+        ))
+        return registry
+
     def test_all_satisfied_true_when_everything_healthy(self):
-        fake_checker = MagicMock()
-        fake_dep = MagicMock(required=True)
-        fake_checker.dependencies = {"pkg": fake_dep}
-        fake_checker.check_all.return_value = {
-            "pkg": MagicMock(is_healthy=True, version="1.0", message="ok"),
-        }
-        fake_checker.get_summary.return_value = {}
+        fake_checker = self.make_registry("pkg", DependencyStatus.SATISFIED)
 
         with patch("Janus.doctor._build_checker", return_value=fake_checker):
             all_ok, status = doctor.check_dependencies()
@@ -59,14 +62,7 @@ class TestCheckDependencies:
         assert status == {"pkg": True}
 
     def test_all_satisfied_false_when_required_dep_missing(self):
-        fake_checker = MagicMock()
-        fake_dep = MagicMock(required=True)
-        fake_dep.get_install_instructions.return_value = "pip install pkg"
-        fake_checker.dependencies = {"pkg": fake_dep}
-        fake_checker.check_all.return_value = {
-            "pkg": MagicMock(is_healthy=False, version=None, message="missing"),
-        }
-        fake_checker.get_summary.return_value = {}
+        fake_checker = self.make_registry("pkg", DependencyStatus.MISSING)
 
         with patch("Janus.doctor._build_checker", return_value=fake_checker):
             all_ok, status = doctor.check_dependencies()
@@ -75,20 +71,27 @@ class TestCheckDependencies:
         assert status == {"pkg": False}
 
     def test_optional_missing_dep_does_not_fail_overall_check(self):
-        fake_checker = MagicMock()
-        fake_dep = MagicMock(required=False)
-        fake_dep.get_install_instructions.return_value = "brew install claude"
-        fake_checker.dependencies = {"claude": fake_dep}
-        fake_checker.check_all.return_value = {
-            "claude": MagicMock(is_healthy=False, version=None, message="missing"),
-        }
-        fake_checker.get_summary.return_value = {}
+        fake_checker = self.make_registry("claude", DependencyStatus.MISSING, required=False)
 
         with patch("Janus.doctor._build_checker", return_value=fake_checker):
             all_ok, status = doctor.check_dependencies()
 
         assert all_ok is True
         assert status == {"claude": False}
+
+    def test_incompatible_package_reports_upgrade_instructions(self, monkeypatch, capsys):
+        from Hestia.software.dependency import PythonPackageDependency
+
+        registry = DependencyRegistry()
+        registry.register(PythonPackageDependency("example", version_specifier=">=2"))
+        monkeypatch.setattr("importlib.metadata.version", lambda name: "1.0")
+
+        with patch("Janus.doctor._build_checker", return_value=registry):
+            all_ok, status = doctor.check_dependencies()
+
+        assert not all_ok
+        assert status == {"example": False}
+        assert 'python -m pip install --upgrade "example>=2"' in capsys.readouterr().out
 
 
 class TestCheckOllamaServerRunning:

@@ -1,285 +1,120 @@
-# Handles installing dependencies. Ollama Installed? Claude Code Installed? Python Installed? Git Installed?
-# Called from install.py in root directory.
-
-"""
-installer.py - Installation logic for Local AI Runtime.
-
-Checks all required dependencies, attempts auto-repair where possible,
-and reports what still needs manual action. Called from install.py at the
-project root.
-
-Relies on DependencyChecker, PythonPackageDependency, and
-SystemCommandDependency from dependencies.py -- no duplicate logic here.
-
-@todo: Add bash as a system command dependency. Must be on path.
-"""
+"""Check and install Domus dependencies using Hestia's software tooling."""
 
 from __future__ import annotations
 
-import sys
-import logging
+import importlib.util
 import platform
 import subprocess
-import importlib.util
+import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Tuple
 
-# Handle imports for both package and direct module loading.
-# When loaded directly via importlib (from install.py), relative imports fail.
-try:
-    from .dependencies import (
-        DependencyChecker,
-        DependencyStatus,
-        PythonPackageDependency,
-        SystemCommandDependency,
-    )
-except ImportError:
-    # When loaded directly via importlib, load dependencies.py directly
-    # to avoid triggering Janus/__init__.py which imports config.py
-    # (which requires dotenv, not yet installed).
-    _janus_dir = Path(__file__).parent
-    _deps_path = _janus_dir / "dependencies.py"
-    _spec = importlib.util.spec_from_file_location("dependencies", _deps_path)
-    _deps_module = importlib.util.module_from_spec(_spec)
-    sys.modules["dependencies"] = _deps_module
-    _spec.loader.exec_module(_deps_module)
-    
-    DependencyChecker = _deps_module.DependencyChecker  # type: ignore[assignment]
-    DependencyStatus = _deps_module.DependencyStatus  # type: ignore[assignment]
-    PythonPackageDependency = _deps_module.PythonPackageDependency  # type: ignore[assignment]
-    SystemCommandDependency = _deps_module.SystemCommandDependency  # type: ignore[assignment]
+from Hestia.software.dependency import DependencyKind
+from Hestia.software.installer import (
+    InstallActionStatus, InstallAuthorization, InstallOutcome, InstallRequest, Installer,
+)
 
-if TYPE_CHECKING:
-    try:
-        from .dependencies import (
-            DependencyChecker,
-            DependencyStatus,
-            PythonPackageDependency,
-            SystemCommandDependency,
-        )
-    except ImportError:
-        # Fallback for type checking when relative imports fail
-        from Janus.dependencies import (  # type: ignore[no-redef]
-            DependencyChecker,
-            DependencyStatus,
-            PythonPackageDependency,
-            SystemCommandDependency,
-        )
-
-logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Manual install URLs - shown when auto-repair is not possible
-# ---------------------------------------------------------------------------
+if __package__:
+    from .requirements import build_registry as _build_checker
+else:
+    _spec = importlib.util.spec_from_file_location("domus_requirements", Path(__file__).with_name("requirements.py"))
+    _requirements = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_requirements)
+    _build_checker = _requirements.build_registry
 
 INSTALL_URLS = {
-    "ollama":  "https://ollama.com/download",
-    "git":     "https://git-scm.com/downloads",
-    "claude":  "https://github.com/anthropics/claude-code",
-    "python":  "https://www.python.org/downloads/",
+    "ollama": "https://ollama.com/download",
+    "git": "https://git-scm.com/downloads",
+    "claude": "https://github.com/anthropics/claude-code",
+    "python": "https://www.python.org/downloads/",
 }
 
 
-# ---------------------------------------------------------------------------
-# Dependency registry
-# ---------------------------------------------------------------------------
-def _build_checker() -> DependencyChecker:  # type: ignore[type-arg]
-    """
-    Register all dependencies the runtime needs.
-
-    Required:
-        - Python packages: hestia-system, packaging
-        - Python package: pynvml (NVIDIA GPU monitoring)
-        - System commands: python, ollama, git
-
-    Optional:
-        - System command: claude (Claude Code integration)
-    """
-    checker = DependencyChecker()
-
-    checker.register_many([
-        # Python packages
-        PythonPackageDependency(
-            "hestia-system",
-            import_name="Hestia",
-            min_version="0.2.0",
-            required=True,
-            description="System discovery, hardware and software analysis, and AI model recommendations",
-        ),
-        PythonPackageDependency(
-            "packaging",
-            min_version="23.0",
-            required=True,
-            description="Version comparison for dependency checks",
-        ),
-        PythonPackageDependency(
-            "python-dotenv",
-            import_name="dotenv",
-            min_version="1.0.0",
-            required=True,
-            description="Load environment variables from .env files",
-        ),
-        PythonPackageDependency(
-            "nvidia-ml-py",
-            import_name="pynvml",
-            min_version="12.0.0",
-            required=True,
-            description="NVIDIA GPU monitoring",
-        ),
-        PythonPackageDependency(
-            "mercurius-events",
-            import_name="Mercurius",
-            min_version="0.5.1",
-            required=True,
-            description="Queue-based pub/sub event bus",
-        ),
-
-        # System commands
-        SystemCommandDependency(
-            "python",
-            required=True,
-            description="Python interpreter",
-        ),
-        SystemCommandDependency(
-            "ollama",
-            required=True,
-            description="Ollama model runtime",
-        ),
-        SystemCommandDependency(
-            "git",
-            required=True,
-            description="Git version control",
-        ),
-        SystemCommandDependency(
-            "claude",
-            required=False,
-            description="Claude Code integration (optional)",
-        ),
-    ])
-
-    return checker
+class PipBackend:
+    def install(self, request, *, timeout_seconds, report_progress):
+        try:
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--upgrade", request.target],
+                capture_output=True, text=True, timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise TimeoutError("pip installation timed out") from error
+        if result.returncode:
+            return InstallOutcome(False, result.stderr or result.stdout or "pip installation failed")
+        return InstallOutcome(True, f"Installed {request.target}")
 
 
-# ---------------------------------------------------------------------------
-# Core install flow
-# ---------------------------------------------------------------------------
-
-def check_and_repair(auto_repair: bool = True) -> Tuple[bool, dict]:
-    """
-    Check all dependencies and attempt to repair failures.
-
-    Args:
-        auto_repair: If True, attempt automatic installation/repair.
-
-    Returns:
-        Tuple of (all_required_satisfied, results_dict)
-    """
-    checker = _build_checker()
-
+def check_and_repair(auto_repair: bool = True) -> tuple[bool, dict]:
+    """Check configured dependencies and optionally install Python packages."""
+    registry = _build_checker()
     print("\n[CHECK] Checking dependencies...")
     print("-" * 50)
-    results = checker.check_all()
+    results = registry.check_all()
+    _print_check_results(results)
+    failed_actions = set()
 
-    _print_check_results(checker, results)
-
-    # Attempt repairs on failures
     if auto_repair:
-        failed = {
-            name: result
+        requests = [
+            InstallRequest(
+                action_id=f"install-{name}", group_id="domus-runtime",
+                dependency_name=name, backend="pip",
+                target=f"{name}{result.version_specifier or ''}",
+            )
             for name, result in results.items()
-            if not result.is_healthy
-        }
+            if result.kind == DependencyKind.PYTHON_PACKAGE
+        ]
+        if requests:
+            installer = Installer(registry, {"pip": PipBackend()})
+            plan = installer.plan(requests, results)
+            if plan.actions:
+                print("\n[REPAIR] Installing missing Python packages...")
+                authorization = InstallAuthorization(plan.group_id, frozenset(action.action_id for action in plan.actions))
+                report = installer.execute(plan, authorization)
+                for action in report.actions:
+                    success = action.status == InstallActionStatus.SUCCEEDED
+                    print(f"  {'[OK]' if success else '[X]'} {action.dependency_name}: {action.message}")
+                    if not success:
+                        failed_actions.add(action.dependency_name)
+                results.update(report.rechecks)
+                print("\n[RECHECK] Re-checking after repair...")
+                _print_check_results(results)
 
-        if failed:
-            print("\n[REPAIR] Attempting auto-repair...")
-            print("-" * 50)
-            repair_results = checker.repair_failures(auto_repair=True)
-
-            for name, (success, message) in repair_results.items():
-                icon = "[OK]" if success else "[X]"
-                print(f"  {icon} {name}: {message}")
-
-            # Re-check after repair
-            print("\n[RECHECK] Re-checking after repair...")
-            print("-" * 50)
-            results = checker.check_all()
-            _print_check_results(checker, results)
-
-    summary = checker.get_summary()
-    all_required_ok = _all_required_satisfied(checker, results)
-
+    all_required_ok = all(
+        not result.required or (result.is_satisfied and name not in failed_actions)
+        for name, result in results.items()
+    )
     return all_required_ok, results
 
-def _print_check_results(checker: DependencyChecker, results: dict) -> None:  # type: ignore[type-arg]
-    """Print a formatted dependency check table."""
-    for name, result in results.items():
-        dep = checker.dependencies[name]
 
-        if result.is_healthy:
-            version_str = f"  ({result.version})" if result.version else ""
-            print(f"  [OK] {name}{version_str}")
-        elif not dep.required:
-            print(f"  [!] {name}: NOT FOUND (optional)")
-            print(f"     -> {dep.get_install_instructions()}")
-            if name in INSTALL_URLS:
-                print(f"     -> {INSTALL_URLS[name]}")
+def _print_check_results(results: dict) -> None:
+    for name, result in results.items():
+        if result.is_satisfied:
+            version = f"  ({result.version})" if result.version else ""
+            print(f"  [OK] {name}{version}")
         else:
-            print(f"  [X] {name}: {result.message}")
-            print(f"     -> {dep.get_install_instructions()}")
-            if name in INSTALL_URLS:
-                print(f"     -> {INSTALL_URLS[name]}")
-
-def _all_required_satisfied(checker: DependencyChecker, results: dict) -> bool:  # type: ignore[type-arg]
-    """Return True only if every required dependency is healthy."""
-    for name, result in results.items():
-        dep = checker.dependencies[name]
-        if dep.required and not result.is_healthy:
-            return False
-    return True
+            marker = "[X]" if result.required else "[!]"
+            print(f"  {marker} {name}: {result.message}")
+            if result.kind == DependencyKind.PYTHON_PACKAGE:
+                print(f'     -> python -m pip install --upgrade "{name}{result.version_specifier or ""}"')
+            else:
+                print(f"     -> Install {name} and ensure it is on PATH")
+                if name in INSTALL_URLS:
+                    print(f"     -> {INSTALL_URLS[name]}")
 
 
-# ---------------------------------------------------------------------------
-# Full install entry point
-# ---------------------------------------------------------------------------
 def run_install(auto_repair: bool = True) -> bool:
-    """
-    Run the full installation process.
-
-    Checks all dependencies, attempts repairs, then prints a final summary
-    telling the user exactly what (if anything) still needs manual action.
-
-    Args:
-        auto_repair: Whether to automatically install/repair where possible.
-
-    Returns:
-        bool: True if all required dependencies are satisfied after install.
-    """
-    _print_banner()
-
-    all_ok, results = check_and_repair(auto_repair=auto_repair)
-
-    _print_summary(all_ok)
-
-    return all_ok
-
-def _print_banner() -> None:
     print("\n" + "=" * 50)
     print("[INSTALL] Local AI Runtime - Installer")
     print("=" * 50)
     print(f"Python:   {sys.version.split()[0]}")
     print(f"Platform: {platform.system()} {platform.release()}")
-
-def _print_summary(all_ok: bool) -> None:
+    all_ok, _ = check_and_repair(auto_repair=auto_repair)
     print("\n" + "=" * 50)
     print("[SUMMARY] Installation Summary")
     print("=" * 50)
-
     if all_ok:
         print("[OK] All required dependencies are satisfied.")
-        print("[OK] Local AI Runtime is ready to use.\n")
-        print("  Run:  python -m Janus help")
+        print("  Run: python -m Janus help")
     else:
-        print("[X] Some required dependencies could not be installed automatically.")
-        print("  Please install the items marked [X] above, then re-run:\n")
-        print("      python install.py\n")
+        print("[X] Some required dependencies are not satisfied.")
+        print("  Follow the instructions above, then re-run python install.py")
+    return all_ok

@@ -26,7 +26,7 @@ class TestPersistenceRoundTrip:
         )
         monkeypatch.setattr(
             "Mentis.context.ModelRecommender",
-            lambda profile: MagicMock(recommend=MagicMock(return_value=fake_model_recommendation)),
+            lambda profile, weight=None: MagicMock(recommend=MagicMock(return_value=fake_model_recommendation)),
         )
         ctx = RuntimeContext(project_name="TestProject")
         assert ctx.startup(suggested_host=host_project_dir, non_interactive=True)

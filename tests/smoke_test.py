@@ -175,14 +175,10 @@ def check_utils_module():
 
 
 def check_dependencies_module():
-    from Janus.dependencies import DependencyChecker, PythonPackageDependency
-    checker = DependencyChecker()
-    checker.register_many([
-        PythonPackageDependency("hestia-system", import_name="Hestia", required=True),
-    ])
-    results = checker.check_all()
-    assert results["hestia-system"].is_healthy
-    return f"checked {len(results)} dependency record(s)"
+    from Janus.requirements import build_registry
+    result = build_registry().check("hestia-system")
+    assert result.is_satisfied
+    return "Hestia dependency check succeeded"
 
 
 def check_context_module():
@@ -315,7 +311,7 @@ CORE_CHECKS = [
     ("utils.configure_logging / load_json", check_utils_module),
     ("Hestia.detect_hardware", check_hardware_detection),
     ("Hestia.get_model_info", check_model_catalog_import),
-    ("Janus.dependencies.DependencyChecker", check_dependencies_module),
+    ("Hestia dependency registry", check_dependencies_module),
     ("Faber.session create/get/stop cycle", check_session_lifecycle),
     ("Mentis.context module imports", check_context_module),
     ("Custos.mcp.MCPManager stub imports", check_mcp_stub),

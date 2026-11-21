@@ -71,4 +71,4 @@ Current implementation note: `RuntimeContext.working_dir` is assigned `<host>/.a
 
 `Janus.doctor.full_diagnostic()` checks Python/system dependencies, Ollama availability, installed models, and MCP configuration. The `doctor` CLI command prints its result.
 
-`Janus.dependencies.DependencyChecker` supports package, system-command, directory, and environment-variable dependencies. `Janus.installer` backs `install.py`'s check-and-repair flow; the standalone installer supports `--check-only` and `--no-repair`.
+`Janus.requirements.build_registry()` registers Domus requirements with Hestia's `DependencyRegistry`. `Janus.installer` uses Hestia's `Installer` with caller-authorized pip actions; system commands require manual installation. The standalone installer requires Hestia 0.5.0 or later and supports `--check-only` and `--no-repair` without installation. The former `Janus.dependencies` API has been removed; use `Hestia.software.dependency` directly for custom checks.

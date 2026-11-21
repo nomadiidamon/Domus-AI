@@ -24,6 +24,7 @@ from Hestia import (
     HardwareProfile, HardwareDetector, ModelRecommender, ModelRecommendation,
     AcceleratorType, ModelSize
 )
+from Hestia.models import ModelRecommendationWeight
 
 
 logger = logging.getLogger(__name__)
@@ -215,6 +216,7 @@ class RuntimeContext:
         project_name: str = "DefaultProject",
         project_dir: Optional[Path] = None,
         mode: RuntimeMode = RuntimeMode.DEVELOPMENT,
+        recommendation_weight: Optional[ModelRecommendationWeight] = None,
     ):
         """
         Initialize runtime context in memory only.
@@ -231,9 +233,11 @@ class RuntimeContext:
             project_dir: Project root directory (advisory only until
                          startup() resolves the real host project root)
             mode: Operating mode for the runtime
+            recommendation_weight: Optional Hestia model recommendation constraints
         """
         self.project_name = project_name
         self.mode = mode
+        self.recommendation_weight = recommendation_weight
 
         # Directories are NOT resolved or created here. They remain None
         # until startup() sets them via paths.py's host-project resolution.
@@ -423,7 +427,7 @@ class RuntimeContext:
             detector = HardwareDetector()
             self.hardware_profile = detector.detect()
             
-            recommender = ModelRecommender(self.hardware_profile)
+            recommender = ModelRecommender(self.hardware_profile, weight=self.recommendation_weight)
             self.model_recommendation = recommender.recommend()
             
             logger.info(f"Hardware detected: {self.hardware_profile.primary_accelerator.value}")
@@ -816,9 +820,10 @@ def initialize_context(
     project_name: str = "DefaultProject",
     project_dir: Optional[Path] = None,
     mode: RuntimeMode = RuntimeMode.DEVELOPMENT,
+    recommendation_weight: Optional[ModelRecommendationWeight] = None,
 ) -> RuntimeContext:
     """Initialize and return the global runtime context."""
     global _global_context
-    _global_context = RuntimeContext(project_name, project_dir, mode)
+    _global_context = RuntimeContext(project_name, project_dir, mode, recommendation_weight)
     return _global_context
 
