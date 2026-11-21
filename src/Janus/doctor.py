@@ -8,81 +8,13 @@ import urllib.request
 import urllib.error
 from typing import Dict, List, Tuple
 from pathlib import Path
-from Janus.dependencies import (
-    DependencyChecker, PythonPackageDependency,
-    SystemCommandDependency, DependencyStatus
-)
+from Hestia.software.doctor import Doctor
+from Janus.requirements import build_registry as _build_checker
 
 logger = logging.getLogger(__name__)
 
 ## @todo: Read the config for the correct OLLAMA_API_BASE URL instead of hardcoding it.
 OLLAMA_API_BASE = "http://localhost:11434"
-
-def _build_checker() -> DependencyChecker:
-    """Build the standard dependency checker for the runtime."""
-    checker = DependencyChecker()
-
-    checker.register_many([
-        # Python packages
-        PythonPackageDependency(
-            "hestia-system",
-            import_name="Hestia",
-            min_version="0.2.0",
-            required=True,
-            description="System discovery, hardware and software analysis, and AI model recommendations",
-        ),
-        PythonPackageDependency(
-            "packaging",
-            min_version="23.0",
-            required=True,
-            description="Version comparison for dependency checks",
-        ),
-        PythonPackageDependency(
-            "python-dotenv",
-            import_name="dotenv",
-            min_version="1.0.0",
-            required=True,
-            description="Load environment variables from .env files",
-        ),
-        PythonPackageDependency(
-            "nvidia-ml-py",
-            import_name="pynvml",
-            min_version="7.352.0",
-            required=True,
-            description="NVIDIA GPU monitoring",
-        ),
-        PythonPackageDependency(
-            "mercurius-events",
-            import_name="Mercurius",
-            min_version="0.5.1",
-            required=True,
-            description="Queue-based pub/sub event bus",
-        ),
-
-        # System commands
-        SystemCommandDependency(
-            "python",
-            required=True,
-            description="Python interpreter",
-        ),
-        SystemCommandDependency(
-            "ollama",
-            required=True,
-            description="Ollama model runtime",
-        ),
-        SystemCommandDependency(
-            "git",
-            required=True,
-            description="Git version control",
-        ),
-        SystemCommandDependency(
-            "claude",
-            required=False,
-            description="Claude Code integration (optional)",
-        ),
-    ])
-
-    return checker
 
 def check_dependencies() -> Tuple[bool, Dict[str, bool]]:
     """
@@ -94,43 +26,40 @@ def check_dependencies() -> Tuple[bool, Dict[str, bool]]:
     print("\n[CHECK] Checking Dependencies")
     print("-" * 50)
     
-    checker = _build_checker()
-    results = checker.check_all()
-
-    status = {}
-    all_satisfied = True
+    report = Doctor(_build_checker()).run()
+    results = report.dependencies
+    status = {name: result.is_satisfied for name, result in results.items()}
 
     for name, result in results.items():
-        status[name] = result.is_healthy
-        dep = checker.dependencies[name]
-
-        if result.is_healthy:
+        if result.is_satisfied:
             print(f"[OK] {name}: {result.version or result.message}")
-        elif not dep.required:
-            print(f"[!] {name}: NOT FOUND (optional)")
+        elif not result.required:
+            print(f"[!] {name}: {result.message} (optional)")
         else:
-            print(f"[X] {name}: NOT FOUND")
-            all_satisfied = False
+            print(f"[X] {name}: {result.message}")
 
-    summary = checker.get_summary()
-
-    if not all_satisfied:
+    if not report.healthy:
         print("\n[!] REQUIRED dependencies missing:")
         for name, result in results.items():
-            dep = checker.dependencies[name]
-            if dep.required and not result.is_healthy:
-                print(f"  - {name} -- {dep.get_install_instructions()}")
+            if result.required and not result.is_satisfied:
+                print(f"  - {name} -- {_install_instructions(name, result.kind.value, result.version_specifier)}")
 
     missing_optional = [
         name for name, result in results.items()
-        if not result.is_healthy and not checker.dependencies[name].required
+        if not result.is_satisfied and not result.required
     ]
     if missing_optional:
         print("\n[!] OPTIONAL dependencies missing:")
         for name in missing_optional:
-            print(f"  - {name} -- {checker.dependencies[name].get_install_instructions()}")
+            result = results[name]
+            print(f"  - {name} -- {_install_instructions(name, result.kind.value, result.version_specifier)}")
 
-    return all_satisfied, status
+    return report.healthy, status
+
+def _install_instructions(name: str, kind: str, version_specifier: str | None) -> str:
+    if kind == "python_package":
+        return f'python -m pip install --upgrade "{name}{version_specifier or ""}"'
+    return f"Please install {name} and ensure it is on PATH"
 
 def _check_ollama_server_running(timeout: int = 3) -> bool:
     """

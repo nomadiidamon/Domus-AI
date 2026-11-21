@@ -25,7 +25,12 @@ _installer_path = _src_dir / "Janus" / "installer.py"
 _spec = importlib.util.spec_from_file_location("installer", _installer_path)
 _installer_module = importlib.util.module_from_spec(_spec)
 sys.modules["installer"] = _installer_module
-_spec.loader.exec_module(_installer_module)
+try:
+    _spec.loader.exec_module(_installer_module)
+except ImportError as error:
+    print(f"Cannot load the Hestia installer: {error}", file=sys.stderr)
+    print('Install its prerequisite with: python -m pip install "hestia-system>=0.5.0"', file=sys.stderr)
+    sys.exit(1)
 
 run_install = _installer_module.run_install
 

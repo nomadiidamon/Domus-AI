@@ -41,7 +41,7 @@ The MCP server implementations and their bundled configuration are under [src/Do
 - python-dotenv: v1.0 (or greater) for .env file support
 - nvidia-ml-py: v12.0.0 (or greater), required package dependency and used for NVIDIA GPU monitoring
 - mercurius-events: v0.5.1 (or greater) for the queue-based pub/sub event bus; imported as `Mercurius`. See the [Mercurius repository](https://github.com/nomadiidamon/Mercurius).
-- hestia-system: v0.2.0 (or greater) for hardware discovery and model recommendations; imported as `Hestia`. See the [Hestia repository](https://github.com/nomadiidamon/Hestia).
+- hestia-system: v0.5.0 (or greater) for hardware discovery, model recommendations, and read-only dependency diagnostics; imported as `Hestia`. See the [Hestia repository](https://github.com/nomadiidamon/Hestia).
 
 ### Optional Dependencies
 - Claude Code: For Claude models, or direct integration with Claude Code's CLI if desired.
@@ -63,7 +63,11 @@ ollama --version
 ```
 
 ### 3. Run the installer
-The installer checks for required tools (Python, Git, Ollama) and Python packages (`packaging`, `python-dotenv`, `nvidia-ml-py`, `mercurius-events`, `hestia-system`), and attempts to auto-repair anything missing (e.g. installing missing Python packages via pip):
+First install Hestia, which provides the dependency and installer framework:
+```bash
+python -m pip install "hestia-system>=0.5.0"
+```
+The installer checks required tools (Python, Git, Ollama) and Python packages (`packaging`, `python-dotenv`, `nvidia-ml-py`, `mercurius-events`, `hestia-system`). Running it authorizes pip installation of missing or incompatible Python packages. System tools must be installed manually:
 ```bash
 python install.py
 ```
@@ -76,6 +80,8 @@ python install.py --check-only
 Installing the package makes the `janus` command, `python -m Janus`, and the Python subsystem packages available from any directory. See the [Janus API](src/Janus/JanusAPI_Doc.md) for CLI usage and the subsystem API docs above for Python usage. Config, Modelfiles, and MCP server definitions ship inside the package (`DomusData`, `DomusMCP`), so no repo checkout is needed at runtime.
 
 **General usage (non-editable):**
+Before building from an existing checkout, remove stale `build/` artifacts from earlier builds. Setuptools may otherwise include modules that have since been deleted.You can remove all artifacts by running `scripts/clean_domus.py` or any of its platform specific runners.
+
 ```bash
 python -m pip install .
 ```
