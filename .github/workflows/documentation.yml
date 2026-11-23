@@ -4,9 +4,13 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'src/**'
-      - 'Docs/**'
+      - 'python/src/**'
+      - 'python/tests/**'
+      - 'docs/**'
+      - 'cpp/src/**'
       - 'Doxyfile'
+      - 'project.ini'
+      - 'README.md'
       - '.github/workflows/documentation.yml'
   workflow_dispatch:
 
@@ -33,7 +37,7 @@ jobs:
 
       - name: Validate source encoding
         run: |
-          BAD_FILES=$(find Muto Docs -type f \( -name "*.h" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.md" \) -print0 | xargs -0 file -i | grep -v "charset=us-ascii\|charset=utf-8" || true)
+          BAD_FILES=$(find cpp python/src docs -type f \( -name "*.h" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.md" \) -print0 | xargs -0 file -i | grep -v "charset=us-ascii\|charset=utf-8" || true)
 
           if [ -n "$BAD_FILES" ]; then
             echo "Files with non UTF-8 encoding detected:"
@@ -99,31 +103,31 @@ jobs:
 
       - name: Check generated LaTeX encoding
         run: |
-          grep -rP -n --include="*.tex" "[^\x00-\x7F]" Docs/latex || true
+          grep -rP -n --include="*.tex" "[^\x00-\x7F]" docs/latex || true
 
       - name: Build PDF documentation
         run: |
-          cd Docs/latex
+          cd docs/latex
           make -j$(nproc)
 
       - name: Rename PDF
         run: |
-          mv Docs/latex/refman.pdf "Docs/latex/${{ steps.project.outputs.pdf_name }}"
+          mv docs/latex/refman.pdf "docs/latex/${{ steps.project.outputs.pdf_name }}"
     
       - name: Copy PDF into documentation folders
         run: |
-          cp "Docs/latex/${{ steps.project.outputs.pdf_name }}" Docs/
-          cp "Docs/latex/${{ steps.project.outputs.pdf_name }}" Docs/html/
+          cp "docs/latex/${{ steps.project.outputs.pdf_name }}" docs/
+          cp "docs/latex/${{ steps.project.outputs.pdf_name }}" docs/html/
 
       - name: Verify documentation output
         run: |
-          test -f Docs/html/index.html
+          test -f docs/html/index.html
           echo "Documentation generated successfully"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: Docs/html
+          path: docs/html
 
       - name: Deploy GitHub Pages
         id: deployment
@@ -133,4 +137,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.project.outputs.pdf_name }}
-          path: Docs/latex/${{ steps.project.outputs.pdf_name }}
+          path: docs/latex/${{ steps.project.outputs.pdf_name }}

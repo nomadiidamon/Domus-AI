@@ -1,0 +1,32 @@
+#!/bin/sh
+
+set -e
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+check_versions() {
+	label=$1
+	package_content=$2
+	doc_content=$3
+	package_version=$(printf '%s\n' "$package_content" | sed -n 's/^version[[:space:]]*=[[:space:]]*//p' | tr -d '"[:space:]')
+	doc_version=$(printf '%s\n' "$doc_content" | sed -n 's/^PROJECT_NUMBER[[:space:]]*=[[:space:]]*//p' | tr -d '"[:space:]')
+
+	echo "Checking $label versions: package=$package_version, Doxyfile=$doc_version"
+	if [ -z "$package_version" ] || [ -z "$doc_version" ]; then
+		echo "ERROR: Could not read both $label versions from project.ini and Doxyfile."
+		return 1
+	fi
+	if [ "$package_version" != "$doc_version" ]; then
+		echo "ERROR: $label version mismatch: package=$package_version, Doxyfile=$doc_version"
+		return 1
+	fi
+}
+
+staged_package=$(git show :project.ini)
+staged_doc=$(git show :Doxyfile)
+working_package=$(cat "$ROOT/project.ini")
+working_doc=$(cat "$ROOT/Doxyfile")
+
+check_versions "staged" "$staged_package" "$staged_doc"
+check_versions "working tree" "$working_package" "$working_doc"
+echo "Package and Doxygen versions match in both snapshots."

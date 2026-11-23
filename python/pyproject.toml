@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "domus-ai"
+dynamic = ["version", "description", "readme", "authors", "license", "requires-python", "urls"]
+dependencies = [
+    "packaging>=23.0",
+    "nvidia-ml-py>=12.0.0",
+    "python-dotenv>=1.0.0",
+    "mercurius-events>=0.5.1",
+    "hestia-system>=0.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[project.scripts]
+janus = "Janus.main:main"
+
+# Explicit package list rather than find_packages(), since the subsystem
+# packages (Janus, Mentis, Faber, Custos, DomusEvents, Lares,
+# DomusAPI) don't share a common namespace prefix - each is independently
+# top-level under src/.
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["utils"]
+include-package-data = true
+
+[tool.setuptools.packages]
+find = { where = ["src"], include = ["Janus*", "Mentis*", "Faber*", "Custos*", "DomusEvents*", "Lares*", "DomusAPI*", "DomusMCP*", "DomusData*"] }
+
+# Runtime data read through importlib.resources (see Janus.paths).
+[tool.setuptools.package-data]
+DomusData = ["config/*.json", "config/*.env", "Modelfiles/*/Modelfile*"]
+DomusMCP = ["servers.json", "profiles/*.json"]
+
+[tool.pytest.ini_options]
+
+# Where pytest looks for tests.
+testpaths = ["tests"]
+
+# Standard test discovery patterns.
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Registered markers.
+markers = [
+    "janus: tests for the Janus subsystem (CLI, config, paths, dependencies, doctor, installer)",
+    "faber: tests for the Faber subsystem (sessions, model/ollama/claude process management)",
+    "mentis: tests for the Mentis subsystem (runtime context and state)",
+    "custos: tests for the Custos subsystem (security, permissions, MCP)",
+    "lares: tests for the Lares subsystem (agents) - currently a stub package",
+    "domusevents: tests for the DomusEvents module (event vocabulary and process-wide bus over Mercurius)",
+    "domusapi: tests for the DomusAPI subsystem (top-level wrapper) - currently a stub package",
+    "utils: tests for the shared utils module",
+    "e2e: end-to-end tests requiring a live Ollama server (deselect with '-m \"not e2e\"')",
+    "slow: builds a wheel via pip (deselect with '-m \"not slow\"')",
+]
+
+# Fail loudly on unknown markers.
+addopts = "--strict-markers -ra"

@@ -1,0 +1,13 @@
+#!/bin/sh
+
+echo "Checking for merge conflict markers..."
+
+if git diff --cached --no-ext-diff --unified=0 | grep -qE '^\+(<<<<<<< |=======$|>>>>>>> )'; then
+    echo
+    echo "ERROR: Merge conflict markers found in staged changes."
+    exit 1
+fi
+
+echo "No merge conflict markers found."
+
+exit 0

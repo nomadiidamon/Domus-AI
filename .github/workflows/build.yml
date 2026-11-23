@@ -1,0 +1,180 @@
+name: Build and Publish Python Package
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.10"
+
+jobs:
+  verify:
+    name: Verify version and run tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out workflow ref
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install package and test dependencies
+        run: |
+          set -euo pipefail
+          echo "Installing Domus-AI and its development dependencies..."
+          python -m pip install ".[dev]"
+        working-directory: python
+
+      - name: Read package version
+        id: package_version
+        working-directory: python
+        run: |
+          set -euo pipefail
+          echo "Reading the installed Domus-AI package version..."
+          PACKAGE_VERSION="$(python -c 'from importlib.metadata import version; print(version("domus-ai"))')"
+          if [ -z "$PACKAGE_VERSION" ]; then
+            echo "::error::Could not determine the installed Domus-AI package version."
+            exit 1
+          fi
+          echo "::notice title=Package version::$PACKAGE_VERSION"
+          echo "version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Verify package version matches shared metadata
+        env:
+          PACKAGE_VERSION: ${{ steps.package_version.outputs.version }}
+        run: |
+          set -euo pipefail
+          PROJECT_VERSION="$(sed -n 's/^version[[:space:]]*=[[:space:]]*//p' ../project.ini | tr -d '"[:space:]')"
+          DOC_VERSION="$(sed -n 's/^PROJECT_NUMBER[[:space:]]*=[[:space:]]*//p' ../Doxyfile | tr -d '"[:space:]')"
+          echo "Package version: $PACKAGE_VERSION"
+          echo "Shared project version: $PROJECT_VERSION"
+          echo "Doxyfile version: $DOC_VERSION"
+          if [ -z "$PROJECT_VERSION" ] || [ "$PACKAGE_VERSION" != "$PROJECT_VERSION" ]; then
+            echo "::error title=Version mismatch::Package version must match project.ini."
+            exit 1
+          fi
+          if [ -z "$DOC_VERSION" ] || [ "$PROJECT_VERSION" != "$DOC_VERSION" ]; then
+            echo "::error title=Version mismatch::Doxyfile version must match project.ini."
+            exit 1
+          fi
+          echo "Package and documentation versions match project.ini."
+        working-directory: python
+
+      # A release tag must match the version embedded in the package.
+      - name: Verify version matches Git tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          PACKAGE_VERSION: ${{ steps.package_version.outputs.version }}
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "Package version: $PACKAGE_VERSION"
+          echo "Git tag version: $TAG_VERSION"
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error title=Version mismatch::Package $PACKAGE_VERSION does not match tag $TAG_VERSION."
+            exit 1
+          fi
+          echo "Package version matches the release tag."
+
+      - name: Run tests
+        run: |
+          set -euo pipefail
+          echo "Running the full Python test suite..."
+          python -m pytest -ra
+          echo "All Python tests passed."
+        working-directory: python
+
+  build:
+    name: Build Python distributions
+    runs-on: ubuntu-latest
+    needs: verify
+
+    steps:
+      - name: Check out workflow ref
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install build tools
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade build twine
+          python -m build --version
+          python -m twine --version
+
+      - name: Build distributions
+        run: |
+          set -euo pipefail
+          echo "Building source and wheel distributions from python/..."
+          python -m build --verbose
+        working-directory: python
+
+      - name: Verify source distribution can be rebuilt
+        run: |
+          set -euo pipefail
+          SOURCE_DIST="$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)"
+          if [ -z "$SOURCE_DIST" ]; then
+            echo "::error::No source distribution was created."
+            exit 1
+          fi
+          TMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "$TMP_DIR"' EXIT
+          tar -xzf "$SOURCE_DIST" -C "$TMP_DIR"
+          SOURCE_DIR="$(find "$TMP_DIR" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          if [ -z "$SOURCE_DIR" ]; then
+            echo "::error::Could not find extracted source distribution."
+            exit 1
+          fi
+          python -m build --sdist --outdir "$TMP_DIR/rebuilt" "$SOURCE_DIR"
+          python -m twine check "$TMP_DIR"/rebuilt/*
+        working-directory: python
+
+      - name: Check distributions
+        run: |
+          set -euo pipefail
+          echo "Validating generated distributions..."
+          ls -lh dist/
+          python -m twine check dist/*
+        working-directory: python
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v5
+        with:
+          name: python-package-distributions
+          path: python/dist/
+
+  publish:
+    name: Publish to PyPI
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: pypi
+      url: https://pypi.org/p/domus-ai
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v6
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

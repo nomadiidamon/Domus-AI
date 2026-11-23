@@ -1,0 +1,6 @@
+include README.md
+include pyproject.toml
+include setup.py
+include install.py
+recursive-include scripts *
+recursive-include tests test_*.py conftest.py

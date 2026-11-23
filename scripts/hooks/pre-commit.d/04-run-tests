@@ -1,0 +1,44 @@
+#!/bin/sh
+
+echo "Running tests..."
+
+if [ "$SKIP_TESTS" = "1" ]; then
+    echo "SKIP_TESTS=1 set, skipping tests."
+    exit 0
+fi
+
+RELEVANT=$(git diff --cached --name-only --diff-filter=ACMR | \
+    grep -E '^(python/(src|tests)/|python/pyproject\.toml$|examples/|cpp/src/)' || true)
+
+if [ -z "$RELEVANT" ]; then
+    echo "No Python source, test, example, or C++ source files staged; skipping tests."
+    exit 0
+fi
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+PY=""
+# Run each candidate; the Windows Store python3 stub passes `command -v` but fails to execute.
+for candidate in python3 python "py -3"; do
+    if $candidate -c "import sys" >/dev/null 2>&1; then
+        PY="$candidate"
+        break
+    fi
+done
+
+if [ -z "$PY" ]; then
+    echo "ERROR: no working Python found (tried python3, python, py -3)."
+    exit 1
+fi
+
+cd "$ROOT/python"
+$PY -m pytest
+STATUS=$?
+
+if [ $STATUS -ne 0 ]; then
+    echo ""
+    echo "ERROR: Python tests failed. Fix the failures or set SKIP_TESTS=1 to bypass this hook."
+    exit 1
+fi
+
+exit 0

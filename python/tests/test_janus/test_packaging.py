@@ -1,0 +1,170 @@
+"""
+Tests for packaged runtime data (DomusData, DomusMCP) and how Janus.paths
+locates it.
+
+Janus.paths resolves bundled data with importlib.resources unless
+LOCAL_AI_RUNTIME_ROOT overrides it. These tests cover the default branch
+(what a non-editable install uses) and the contents of a built wheel.
+"""
+
+import json
+import runpy
+import shutil
+import subprocess
+import sys
+import zipfile
+from email.parser import BytesParser
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from packaging.requirements import Requirement
+
+from Janus import config, paths
+
+pytestmark = pytest.mark.janus
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+SRC_DIR = PROJECT_ROOT / "src"
+
+CONFIG_FILES = ["claude.json", "models.json", "runtime.json", "ollama.env"]
+
+
+@pytest.mark.parametrize("has_package_info, expected_version", [(True, "0.4.0"), (False, "9.9.9")])
+def test_setup_metadata_precedence(tmp_path, monkeypatch, has_package_info, expected_version):
+    source = tmp_path / "source"
+    source.mkdir()
+    shutil.copy2(PROJECT_ROOT / "setup.py", source)
+    (source / "README.md").write_text("Package readme", encoding="utf-8")
+    (tmp_path / "project.ini").write_text(
+        "[project]\nversion = 9.9.9\ndescription = Parent project\n"
+        "license = Not specified\npython_requires = >=3.10\n"
+        "homepage = https://example.com\n",
+        encoding="utf-8",
+    )
+    if has_package_info:
+        (source / "PKG-INFO").write_text(
+            "Metadata-Version: 2.1\nVersion: 0.4.0\nSummary: Released package\n",
+            encoding="utf-8",
+        )
+    captured = {}
+    monkeypatch.setitem(sys.modules, "setuptools", SimpleNamespace(setup=lambda **kwargs: captured.update(kwargs)))
+    runpy.run_path(str(source / "setup.py"))
+    assert captured["version"] == expected_version
+    assert captured["description"] == ("Released package" if has_package_info else "Parent project")
+
+
+@pytest.fixture
+def no_override(monkeypatch):
+    monkeypatch.delenv("LOCAL_AI_RUNTIME_ROOT", raising=False)
+
+
+class TestPackagedLookup:
+    def test_get_config_path_uses_domusdata(self, no_override):
+        result = paths.get_config_path()
+        assert result.name == "config" and result.parent.name == "DomusData"
+        assert result.is_dir()
+
+    def test_get_modelfiles_path_uses_domusdata(self, no_override):
+        result = paths.get_modelfiles_path()
+        assert result.name == "Modelfiles" and result.parent.name == "DomusData"
+        assert result.is_dir()
+
+    def test_get_mcp_path_uses_domusmcp(self, no_override):
+        result = paths.get_mcp_path()
+        assert result.name == "DomusMCP"
+        assert (result / "servers.json").is_file()
+
+    def test_config_dir_matches_paths(self, no_override):
+        assert config._get_config_dir() == paths.get_config_path()
+
+
+class TestOverridePrecedence:
+    def test_env_root_wins_over_packaged_data(self, isolated_runtime_root):
+        assert paths.get_config_path() == isolated_runtime_root / "config"
+        assert paths.get_modelfiles_path() == isolated_runtime_root / "Modelfiles"
+        assert paths.get_mcp_path() == isolated_runtime_root / "mcp"
+
+
+class TestPackagedDataComplete:
+    @pytest.mark.parametrize("name", CONFIG_FILES)
+    def test_config_file_present(self, no_override, name):
+        assert (paths.get_config_path() / name).is_file()
+
+    def test_every_model_has_a_bundled_modelfile(self, no_override):
+        models = json.loads((paths.get_config_path() / "models.json").read_text())
+        for model in models:
+            modelfile = paths.get_modelfiles_path() / model / f"Modelfile.{model}"
+            assert modelfile.is_file(), f"missing bundled Modelfile for {model}"
+
+    def test_every_model_has_an_mcp_profile(self, no_override):
+        models = json.loads((paths.get_config_path() / "models.json").read_text())
+        for model in models:
+            assert (paths.get_mcp_path() / "profiles" / f"{model}.json").is_file()
+
+
+@pytest.fixture(scope="module")
+def wheel_path(tmp_path_factory):
+    out = tmp_path_factory.mktemp("wheel")
+    source = tmp_path_factory.mktemp("wheel-source")
+    shutil.copytree(
+        PROJECT_ROOT / "src", source / "src",
+        ignore=shutil.ignore_patterns("__pycache__", "*.egg-info", "*.pyc"),
+    )
+    shutil.copy2(PROJECT_ROOT / "pyproject.toml", source)
+    shutil.copy2(PROJECT_ROOT / "README.md", source)
+    shutil.copy2(PROJECT_ROOT / "setup.py", source)
+    shared_metadata = PROJECT_ROOT.parent / "project.ini"
+    if shared_metadata.is_file():
+        shutil.copy2(shared_metadata, source)
+    else:
+        shutil.copy2(PROJECT_ROOT / "PKG-INFO", source)
+    result = subprocess.run(
+        [sys.executable, "-m", "pip", "wheel", str(source),
+         "--no-deps", "-w", str(out), "-q"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        pytest.skip(f"wheel build unavailable: {result.stderr.strip()[-300:]}")
+    return next(out.glob("domus_ai-*.whl"))
+
+
+@pytest.fixture(scope="module")
+def wheel_names(wheel_path):
+    with zipfile.ZipFile(wheel_path) as wheel:
+        return set(wheel.namelist())
+
+
+@pytest.mark.slow
+class TestBuiltWheel:
+    @pytest.mark.parametrize("name", CONFIG_FILES)
+    def test_wheel_has_config(self, wheel_names, name):
+        assert f"DomusData/config/{name}" in wheel_names
+
+    def test_wheel_has_modelfiles(self, wheel_names):
+        for model in ["Analyst", "Mercury", "Minerva", "Vulcan"]:
+            assert f"DomusData/Modelfiles/{model}/Modelfile.{model}" in wheel_names
+
+    def test_wheel_has_mcp_servers_and_profiles(self, wheel_names):
+        assert "DomusMCP/servers.json" in wheel_names
+        for server in ["filesystem", "git", "fetch"]:
+            assert f"DomusMCP/{server}/__main__.py" in wheel_names
+        for model in ["Analyst", "Mercury", "Minerva", "Vulcan"]:
+            assert f"DomusMCP/profiles/{model}.json" in wheel_names
+
+    def test_wheel_has_no_top_level_mcp(self, wheel_names):
+        assert not any(n.startswith("mcp/") for n in wheel_names)
+
+    def test_wheel_depends_on_external_hestia(self, wheel_path, wheel_names):
+        assert not any(name.startswith("Hestia/") for name in wheel_names)
+        assert "Janus/requirements.py" in wheel_names
+        assert "Janus/dependencies.py" not in wheel_names
+        metadata_name = next(name for name in wheel_names if name.endswith(".dist-info/METADATA"))
+        with zipfile.ZipFile(wheel_path) as wheel:
+            metadata = BytesParser().parsebytes(wheel.read(metadata_name))
+        requirements = [Requirement(value) for value in metadata.get_all("Requires-Dist", [])]
+        assert all(requirement.name != "psutil" for requirement in requirements)
+        hestia = next(requirement for requirement in requirements if requirement.name == "hestia-system")
+        assert "0.5.0" in hestia.specifier
+        assert "0.2.0" not in hestia.specifier
+        assert "0.1.0" not in hestia.specifier
