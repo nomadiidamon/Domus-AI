@@ -1027,7 +1027,14 @@ WARN_LOGFILE           =
 # Note: If this tag is empty the current directory is searched.
 
 INPUT                  = README.md \
+                         CODE_OF_CONDUCT.md \
+                         CONTRIBUTING.md \
                          docs/Architecture.md \
+                         docs/Concepts.md \
+                         docs/Semantics.md \
+                         docs/python/README.md \
+                         python/README.md \
+                         examples/ \
                          cpp/src \
                          python/src/
 

@@ -1,3 +1,5 @@
+@page mentis_api Mentis API
+
 # Mentis: Runtime Context and Memory
 
 The memory and mind of the Domus environment. Mentis provides `RuntimeContext`, the in-memory runtime state object, and `AIMemory`, its persistent conversation and user-memory store. Construction of a context is side-effect-free; `startup()` resolves the host project, creates managed directories, detects hardware, and loads saved state.

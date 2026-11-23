@@ -1,5 +1,8 @@
-"""@examples
-Read bundled model configuration through Janus."""
+"""
+@example Janus_2_configuration.py
+
+Read bundled model configuration through Janus.
+"""
 
 from Janus.config import get_model_config, load_models_config
 

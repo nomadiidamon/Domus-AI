@@ -1,5 +1,8 @@
-"""@examples
-Inspect an MCP profile before exposing tools to an agent."""
+"""
+@example Custos_1_mcp_permissions.py
+
+Inspect an MCP profile before exposing tools to an agent.
+"""
 
 from Custos import MCPManager
 

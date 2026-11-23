@@ -10,13 +10,15 @@ python/tests/.smoke_test_output/
 .venv/
 build/
 dist/
-
-
-
 test-output.log
 
 
 
-
+# VS_CODE
 .vscode/
+
+
+# DOMUS-AI
+.domus-AI/
+.domus-host-marker
 

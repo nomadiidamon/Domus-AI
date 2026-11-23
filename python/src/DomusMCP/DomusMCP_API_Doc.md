@@ -1,3 +1,5 @@
+@page domusmcp_api DomusMCP API
+
 # DomusMCP: MCP Servers and Tools
 
 DomusMCP provides local Model Context Protocol (MCP) servers for project files, Git operations, and HTTP(S) fetching. Each server runs as a separate Python subprocess over stdio. The available servers are registered in [`servers.json`](servers.json); model-specific access policies are in `profiles/` and are enforced by Custos.

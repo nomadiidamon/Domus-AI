@@ -1,3 +1,5 @@
+@page domusdata_api DomusData API
+
 # DomusData: Bundled Runtime Data
 
 DomusData packages the default configuration and Ollama Modelfiles used by Domus-AI. It is a data package; it does not expose Python functions. Janus resolves the bundled files through `importlib.resources` and reads configuration from `DomusData/config/` and model definitions from `DomusData/Modelfiles/`.

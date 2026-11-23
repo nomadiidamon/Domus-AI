@@ -1,5 +1,8 @@
-"""@examples
-Send a multi-turn conversation directly through Faber messaging."""
+"""
+@example Faber_1_messaging.py
+
+Send a multi-turn conversation directly through Faber messaging.
+"""
 
 from Faber.messaging import Message, chat
 

@@ -1,5 +1,8 @@
-"""@examples
-Create the event bus, publish an event, and release the subscription."""
+"""
+@example DomusEvents_1_pub_sub.py
+
+Create the event bus, publish an event, and release the subscription.
+"""
 
 from threading import Event
 

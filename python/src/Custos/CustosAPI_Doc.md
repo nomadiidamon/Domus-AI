@@ -1,3 +1,5 @@
+@page custos_api Custos API
+
 # Custos: MCP Permissions and Client
 
 The security guard of Domus-AI. Custos loads per-model MCP permissions and provides the stdio JSON-RPC client used to launch and call local MCP servers. The server implementations and bundled configuration are in the sibling `DomusMCP` package, not in `Custos`.

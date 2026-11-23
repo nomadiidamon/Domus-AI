@@ -1,5 +1,8 @@
-"""@examples
-Use a Lares Agent for one model-bound conversation turn."""
+"""
+@example Lares_1_agent_chat.py
+
+Use a Lares Agent for one model-bound conversation turn.
+"""
 
 from Faber import Message
 from Lares import Agent

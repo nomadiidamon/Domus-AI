@@ -1,3 +1,5 @@
+@page domusapi_api DomusAPI API
+
 # DomusAPI: Package API
 
 `DomusAPI` is the stable, package-level Python surface over Hestia, Faber, Custos, Mentis, and Mercurius. Use it when you want common operations without managing the lower-level subsystem objects directly.

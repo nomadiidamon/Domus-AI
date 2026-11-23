@@ -1,5 +1,8 @@
-"""@examples
-Persist a conversation preference and a durable note with Mentis."""
+"""
+@example Mentis_1_memory.py
+
+Persist a conversation preference and a durable note with Mentis.
+"""
 
 from Mentis import RuntimeContext
 

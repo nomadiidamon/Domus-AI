@@ -1,5 +1,8 @@
-"""@examples
-Subscribe to a Domus event and publish an application event."""
+"""
+@example DomusAPI_3_events.py
+
+Subscribe to a Domus event and publish an application event.
+"""
 
 from threading import Event
 

@@ -1,4 +1,4 @@
-@page Architecture architecture
+@page architecture Architecture
 
 # Domus-AI Architecture
 

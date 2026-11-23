@@ -1,5 +1,8 @@
-"""@examples
-Start a model and send one prompt through the stable package API."""
+"""
+@example DomusAPI_2_messaging.py
+
+Start a model and send one prompt through the stable package API.
+"""
 
 import DomusAPI
 

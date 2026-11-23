@@ -1,5 +1,6 @@
 """
-@examples
+@example DomusAPI_1_lifecycle.py
+
 Initialize the runtime, inspect hardware, and shut down cleanly.
 """
 

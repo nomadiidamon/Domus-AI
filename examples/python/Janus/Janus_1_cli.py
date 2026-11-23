@@ -1,5 +1,8 @@
-"""@examples
-Run Janus diagnostics, or select another read-only CLI command."""
+"""
+@example Janus_1_cli.py
+
+Run Janus diagnostics, or select another read-only CLI command.
+"""
 
 import argparse
 import subprocess

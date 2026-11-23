@@ -1,3 +1,5 @@
+@page janus_api Janus API
+
 # Janus: CLI and Runtime Setup
 
 The threshold users must cross for runtime capabilities. Janus owns the `janus` command, configuration and path resolution, host initialization, dependency checks, diagnostics, and installer flow. The command is available as `janus`, `python -m Janus`, or `Janus` through the optional platform launchers.

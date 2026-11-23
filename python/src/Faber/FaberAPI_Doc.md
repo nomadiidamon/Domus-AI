@@ -1,3 +1,5 @@
+@page faber_api Faber API
+
 # Faber: Process and Model Actions
 
 The actions, tools and workflows of the [Lares](../Lares/LaresAPI_Doc.md). Faber executes process, model, and messaging operations for Janus and Lares. It does not select agent behavior or enforce MCP permissions; see [Lares](../Lares/LaresAPI_Doc.md) and [Custos](../Custos/CustosAPI_Doc.md) for those responsibilities.
