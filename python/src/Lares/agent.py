@@ -27,7 +27,7 @@ Nothing else needs touching.
 @todo: Add the ability to stream chat responses in real-time
 """
 
-import logging
+from utils import get_log_category
 from typing import List, Optional, Tuple
 
 from Custos.mcp import MCPConfigError, filter_tools_for_model, mcp_tools_to_ollama_tools
@@ -38,7 +38,7 @@ from Lares.permissions import AgentPermissions
 from Lares.profiles import AgentProfile, get_profile
 from Lares.response_policy import apply_response_policy
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 __all__ = ["Agent"]
 
@@ -123,8 +123,8 @@ class Agent:
                     extra_env["LOCAL_AI_RUNTIME_HOST"] = str(get_host_project_root())
                 except (ImportError, RuntimeError) as e:
                     logger.warning(
-                        "Agent '%s': host project root unavailable (%s) - "
-                        "continuing without it", self.model, e,
+                        f"Agent '{self.model}': host project root unavailable ({e}) - "
+                        "continuing without it"
                     )
 
                 server_config = self.permissions.get_server_config(server)
@@ -145,8 +145,8 @@ class Agent:
                     self._tool_owners[tool["function"]["name"]] = client
             except (MCPConfigError, MCPClientError) as e:
                 logger.warning(
-                    "Agent '%s': MCP server '%s' unavailable (%s) - "
-                    "continuing without it", self.model, server, e,
+                    f"Agent '{self.model}': MCP server '{server}' unavailable ({e}) - "
+                    "continuing without it"
                 )
                 continue
 
@@ -275,7 +275,6 @@ class Agent:
         result = apply_response_policy(response, self.profile, _retry)
         if result.retried:
             logger.info(
-                "Agent '%s': accepted retried reply after '%s'",
-                self.model, result.reason,
+                f"Agent '{self.model}': accepted retried reply after '{result.reason}'"
             )
         return result.response

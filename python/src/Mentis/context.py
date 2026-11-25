@@ -11,7 +11,7 @@ Serves as the central state store for the entire runtime.
 
 import os
 import json
-import logging
+from utils import configure_logging, get_log_category
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Set
@@ -27,7 +27,7 @@ from Hestia import (
 from Hestia.models import ModelRecommendationWeight
 
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 
 class RuntimeMode(Enum):
@@ -300,14 +300,7 @@ class RuntimeContext:
     def _setup_logging(self):
         """Setup logging for the context."""
         log_file = self.logs_dir / f"runtime_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-        
-        handler = logging.FileHandler(log_file)
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
-        handler.setFormatter(formatter)
-        
-        logger.addHandler(handler)
+        configure_logging(log_file)
     
     def startup(self, suggested_host: Optional[Path] = None, non_interactive: bool = False) -> bool:
         """
@@ -347,11 +340,11 @@ class RuntimeContext:
 
                 ensure_host_dirs()
 
-                self.startup_time = datetime.now()
-                self.is_running = True
-
                 # Logging can only start after logs_dir exists
                 self._setup_logging()
+
+                self.startup_time = datetime.now()
+                self.is_running = True
 
                 # Detect hardware
                 self._detect_hardware()

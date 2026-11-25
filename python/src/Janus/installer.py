@@ -103,7 +103,7 @@ def _print_check_results(results: dict) -> None:
 
 def run_install(auto_repair: bool = True) -> bool:
     print("\n" + "=" * 50)
-    print("[INSTALL] Local AI Runtime - Installer")
+    print("[CHECK] Local AI Runtime - Prerequisite Checker")
     print("=" * 50)
     print(f"Python:   {sys.version.split()[0]}")
     print(f"Platform: {platform.system()} {platform.release()}")
@@ -112,9 +112,10 @@ def run_install(auto_repair: bool = True) -> bool:
     print("[SUMMARY] Installation Summary")
     print("=" * 50)
     if all_ok:
-        print("[OK] All required dependencies are satisfied.")
+        print("[OK] All required runtime dependencies are satisfied.")
+        print('  Install the editable development package with: python python/install.py')
         print("  Run: python -m Janus help")
     else:
         print("[X] Some required dependencies are not satisfied.")
-        print("  Follow the instructions above, then re-run python install.py")
+        print("  Follow the instructions above, then re-run python python/install.py")
     return all_ok

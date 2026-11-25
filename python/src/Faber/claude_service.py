@@ -3,13 +3,13 @@ Handles the Claude Code integration through Ollama.
 """
 
 import subprocess
-import logging
+from utils import get_log_category
 from typing import Optional
 
 from Faber.session import create_session, get_session, stop_session
 
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 
 CLAUDE_SESSION_NAME = "claude"

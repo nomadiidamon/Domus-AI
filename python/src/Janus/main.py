@@ -10,7 +10,7 @@ Handles all AI Runtime commands. Should be the main entry point for the CLI.
 """
 import itertools
 import sys
-import logging
+from utils import get_log_category
 import threading
 import time
 from typing import Optional
@@ -26,10 +26,7 @@ from Faber.messaging import Message, chat as chat_with_model, generate
 from Janus.doctor import full_diagnostic
 from DomusEvents import EventType, initialize_bus, publish_event, shutdown_bus
 
-from utils import configure_logging
-
-configure_logging()
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 
 def print_help() -> None:
@@ -1067,7 +1064,7 @@ def main() -> int:
                 print("\n[!] Operation cancelled")
                 return 1  # <- GRACEFUL Ctrl+C
             except Exception as e:
-                logger.critical(f"Unexpected error in main: {e}", exc_info=True)
+                logger.exception(e, "Unexpected error in main")
                 print(f"\n[X] Unexpected error: {e}")
                 return 1
             finally:
@@ -1083,7 +1080,7 @@ def main() -> int:
         return 0
 
     except Exception as e:
-        logger.critical(f"Unexpected error in main: {e}", exc_info=True)
+        logger.exception(e, "Unexpected error in main")
         print(f"\n[X] Unexpected error: {e}")
         return 1
 

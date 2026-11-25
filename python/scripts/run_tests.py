@@ -15,6 +15,7 @@ Examples:
     python scripts/run_tests.py -m janus -v     # run only the "janus" marker, verbosely
 """
 
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -22,11 +23,17 @@ from pathlib import Path
 
 PYTHON_ROOT = Path(__file__).resolve().parent.parent
 REPO_ROOT = PYTHON_ROOT.parent
-LOG_FILE = REPO_ROOT / "test-output.log"
+LOG_FILE = Path(os.environ.get("DOMUS_TEST_OUTPUT", REPO_ROOT / "test-output.log"))
+
+
+def _python_executable() -> str:
+    """Prefer the repository virtual environment when it exists."""
+    venv_python = REPO_ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    return str(venv_python) if venv_python.is_file() else sys.executable
 
 
 def main() -> int:
-    command = [sys.executable, "-m", "pytest", *sys.argv[1:]]
+    command = [_python_executable(), "-m", "pytest", *sys.argv[1:]]
 
     header = (
         f"Running: {' '.join(command)}\n"

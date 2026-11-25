@@ -21,11 +21,11 @@ Approval is resolved in this order:
 @todo Create a confirmation object that can handle the pre-approval check, interactive prompt, and denial logic in a unified cross-platform manner.
 """
 
-import logging
+from utils import get_log_category
 import os
 import sys
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 ## @todo: Add external pre-approved paths to the configuration file for non-interactive approval.
 _APPROVED_ENV_VAR = "DOMUS_APPROVED_EXTERNAL_READS"
@@ -59,7 +59,7 @@ def request_confirmation(prompt: str) -> bool:
             print(question, end="", flush=True)
             answer = sys.stdin.readline()
     except OSError as e:
-        logger.warning("Could not prompt user for confirmation: %s", e)
+        logger.warning(f"Could not prompt user for confirmation: {e}")
         return False
 
     return answer.strip().lower() in ("y", "yes")
@@ -78,7 +78,7 @@ def require_user_approval(description: str, path: str) -> None:
         PermissionError: If the human did not approve.
     """
     if is_preapproved(path):
-        logger.info("Pre-approved via %s: %s", _APPROVED_ENV_VAR, path)
+        logger.info(f"Pre-approved via {_APPROVED_ENV_VAR}: {path}")
         return
 
     if not request_confirmation(
@@ -89,4 +89,4 @@ def require_user_approval(description: str, path: str) -> None:
             f"Pre-approve via {_APPROVED_ENV_VAR} for non-interactive use."
         )
 
-    logger.info("User approved: %s (%s)", description, path)
+    logger.info(f"User approved: {description} ({path})")

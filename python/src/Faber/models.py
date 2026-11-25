@@ -5,7 +5,7 @@
 """
 
 import json
-import logging
+from utils import get_log_category
 import shlex
 import subprocess
 import urllib.error
@@ -13,7 +13,7 @@ import urllib.request
 from pathlib import Path
 from Faber.session import get_session, create_session, stop_session
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 _context = None
 

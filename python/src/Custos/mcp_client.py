@@ -23,13 +23,13 @@ this pipe. See mcp/confirmation.py.
 """
 
 import json
-import logging
+from utils import get_log_category
 import subprocess
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 DEFAULT_STARTUP_TIMEOUT = 10
 DEFAULT_CALL_TIMEOUT = 60
@@ -120,7 +120,7 @@ class MCPClient:
             self.close()
             raise
 
-        logger.info("MCP server '%s' started (pid %s)", self.server_name, self._process.pid)
+        logger.info(f"MCP server '{self.server_name}' started (pid {self._process.pid})")
 
     def close(self) -> None:
         """Terminate the subprocess, if running. Safe to call more than once."""
@@ -140,7 +140,7 @@ class MCPClient:
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=5)
-        logger.info("MCP server '%s' stopped", self.server_name)
+        logger.info(f"MCP server '{self.server_name}' stopped")
 
     def __enter__(self) -> "MCPClient":
         self.start()
@@ -224,8 +224,7 @@ class MCPClient:
             try:
                 message = json.loads(line)
             except json.JSONDecodeError:
-                logger.warning("Skipping malformed line from '%s': %r",
-                               self.server_name, line[:200])
+                logger.warning(f"Skipping malformed line from '{self.server_name}': {line[:200]!r}")
                 continue
             if message.get("id") == expected_id:
                 return message

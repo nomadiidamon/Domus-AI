@@ -4,7 +4,7 @@ DomusEvents - Domus-AI's event vocabulary and process-wide bus.
 Thin layer over the generic `Mercurius` package (PyPI: mercurius-events).
 """
 
-import logging
+from utils import get_log_category
 import threading
 from enum import Enum
 from typing import Optional
@@ -12,7 +12,7 @@ from typing import Optional
 import Mercurius
 from Mercurius import Event, EventBus
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 __all__ = [
     "Event",

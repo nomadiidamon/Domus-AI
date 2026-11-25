@@ -33,12 +33,12 @@ future work.
 """
 
 import json
-import logging
+from utils import get_log_category
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 
 class MCPConfigError(RuntimeError):
@@ -169,13 +169,12 @@ class MCPManager:
         profile = self._load_profile(agent)
         if server not in profile["servers"]:
             logger.warning(
-                "Server '%s' is not declared in %s's profile - refusing to enable",
-                server, agent,
+                f"Server '{server}' is not declared in {agent}'s profile - refusing to enable"
             )
             return False
 
         self._enabled.setdefault(agent.lower(), set()).add(server)
-        logger.info("Enabled MCP server '%s' for agent '%s'", server, agent)
+        logger.info(f"Enabled MCP server '{server}' for agent '{agent}'")
         return True
 
     def disable(self, agent: str, server: str) -> bool:

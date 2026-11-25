@@ -26,6 +26,6 @@ Start with the shared docs when working on behavior or project structure:
 
 ## Python Workflows
 
-The [Python implementation README](https://github.com/nomadiidamon/Domus-AI/blob/main/python/README.md) describes installation, CLI use, package development, and tests. In brief, install the package in editable mode with its `dev` extra from the repository root, then run `python -m pytest -ra` to exercise the Python suite.
+The [Python implementation README](https://github.com/nomadiidamon/Domus-AI/blob/main/python/README.md) describes installation, CLI use, package development, and tests. In brief, install the package in editable mode with its `dev` extra from the repository root, then run `python -m pytest -c python/pyproject.toml -ra` to exercise the Python suite.
 
 Add Python-specific setup notes, packaging decisions, testing guidance, and implementation workflows here. Put shared design principles and cross-language behavior in the linked project docs, and keep public subsystem behavior documented alongside its API.

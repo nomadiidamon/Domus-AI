@@ -6,7 +6,6 @@ Handles all the ollama commands. Delegates to models.py for model building and p
 """
 
 import subprocess
-import logging
 from typing import Optional
 import time
 from Faber.session import create_session, stop_session, get_session, remove_session

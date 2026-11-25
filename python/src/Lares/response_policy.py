@@ -37,7 +37,7 @@ future build stops needing it) is a one-line profile change, not a code
 change here.
 """
 
-import logging
+from utils import get_log_category
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, List, Optional
 
@@ -46,7 +46,7 @@ from Faber.messaging import ChatResponse, Message
 if TYPE_CHECKING:
     from Lares.profiles import AgentProfile
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 __all__ = [
     "ResponsePolicyResult",
@@ -162,8 +162,7 @@ def apply_response_policy(
     """
     if profile.retry_on_empty_reply and looks_like_empty_reply(response):
         logger.info(
-            "Agent '%s' returned an empty reply - retrying once with a nudge",
-            profile.name,
+            f"Agent '{profile.name}' returned an empty reply - retrying once with a nudge"
         )
         retried_response = retry(Message("user", _EMPTY_REPLY_NUDGE))
         return ResponsePolicyResult(retried_response, retried=True, reason="empty_reply")
@@ -174,8 +173,8 @@ def apply_response_policy(
         and looks_like_prompt_echo(response)
     ):
         logger.info(
-            "Agent '%s' replied without engaging with its tool result - "
-            "retrying once with a grounding nudge", profile.name,
+            f"Agent '{profile.name}' replied without engaging with its tool result - "
+            "retrying once with a grounding nudge"
         )
         retried_response = retry(Message("user", _PROMPT_ECHO_NUDGE))
         return ResponsePolicyResult(retried_response, retried=True, reason="prompt_echo")

@@ -7,6 +7,7 @@ name = "domus-ai"
 dynamic = ["version", "description", "readme", "authors", "license", "requires-python", "urls"]
 dependencies = [
     "packaging>=23.0",
+    "platformdirs>=3.0",
     "nvidia-ml-py>=12.0.0",
     "python-dotenv>=1.0.0",
     "mercurius-events>=0.5.1",

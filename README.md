@@ -4,14 +4,16 @@ Domus-AI is a local-first runtime for using AI models in development and testing
 
 ## Quick Start
 
-Install Ollama and Python 3.10 or newer, then install Domus-AI from a checkout:
+Install Ollama and Python 3.10 or newer. For a repository checkout, create and activate a virtual environment first, then install Domus-AI:
 
 ```bash
-python -m pip install ./python
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+python python/install.py
 janus help
 ```
 
-Use `janus doctor` to check the local setup, `janus list` to see installed models, and `janus chat <model>` to start a conversation. For development, install the test extra with `python -m pip install -e "./python[dev]"` and run `python -m pytest`.
+The checkout installer uses the Python interpreter that runs it, installs the local `python/` package in editable mode with its `dev` extra, then checks runtime prerequisites. The cleanup script preserves the repository-root `.venv`. PyPI users should instead create and activate a virtual environment, then run `python -m pip install domus-ai`; the checkout installer is not needed. Use `janus doctor` to check the local setup, `janus list` to see installed models, and `janus chat <model>` to start a conversation. To install only the runtime package from a checkout, use `python -m pip install ./python` in the active environment.
 
 The [Python implementation README](https://github.com/nomadiidamon/Domus-AI/blob/main/python/README.md) covers package installation and usage in more detail. Start with the shared project docs for design, behavior, and contribution guidance:
 

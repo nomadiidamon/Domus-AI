@@ -8,7 +8,7 @@ Messaging to and from models via Ollama's HTTP API (stdlib urllib only).
 """
 
 import json
-import logging
+from utils import get_log_category
 import re
 import urllib.error
 import urllib.request
@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 
 from Faber.models import _get_context
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 ## @todo: Read the URL from the configuration instead of hardcoding it.
 DEFAULT_BASE_URL = "http://localhost:11434"
@@ -177,8 +177,8 @@ def _parse_chat_response(payload: dict, model: str,
         fallback = _extract_fallback_tool_calls(content)
         if fallback:
             logger.info(
-                "Model '%s' returned tool call(s) as text instead of native "
-                "tool_calls - recovered %d via fallback parsing", model, len(fallback),
+                f"Model '{model}' returned tool call(s) as text instead of native "
+                f"tool_calls - recovered {len(fallback)} via fallback parsing"
             )
             tool_calls = fallback
             # The call itself is consumed by the fallback parse - don't
@@ -242,9 +242,8 @@ def _publish(event_type, model: str, message: Message) -> None:
                 "content": message.content,
             },
         )
-    except Exception:
-        logger.debug("Mercurius bus unavailable; messaging event not published",
-                     exc_info=True)
+    except Exception as error:
+        logger.debug("Mercurius bus unavailable; messaging event not published", error=str(error))
 
 ## @todo: Add MAX_TOOL_ITERATIONS to the configuration options.
 MAX_TOOL_ITERATIONS = 12
@@ -341,7 +340,7 @@ def chat(
                 result_text = tool_executor(tool_name, arguments)
             except Exception as e:
                 result_text = f"Error: {e}"
-                logger.warning("Tool '%s' failed during chat: %s", tool_name, e)
+                logger.warning(f"Tool '{tool_name}' failed during chat: {e}")
 
             tool_message = Message("tool", result_text, tool_name=tool_name)
             working_messages.append(tool_message)
@@ -351,9 +350,8 @@ def chat(
 
     if iterations >= max_tool_iterations and response.message.tool_calls:
         logger.warning(
-            "Chat with '%s' hit max_tool_iterations (%d) with tool calls still "
-            "pending - returning the model's last tool-call turn as-is",
-            model, max_tool_iterations,
+            f"Chat with '{model}' hit max_tool_iterations ({max_tool_iterations}) with tool calls still "
+            "pending - returning the model's last tool-call turn as-is"
         )
 
     response.tool_trace = tool_trace
@@ -362,8 +360,7 @@ def chat(
         _record_conversation(model, messages, response.message)
         _record_tool_trace(model, tool_trace)
     
-    logger.info("Chat with '%s' completed (%s eval tokens, %d tool round(s))",
-                model, response.eval_count, iterations)
+    logger.info(f"Chat with '{model}' completed ({response.eval_count} eval tokens, {iterations} tool round(s))")
     return response
 
 
@@ -421,5 +418,5 @@ def generate(
     if record:
         _record_conversation(model, outbound, response.message)
 
-    logger.info("Generate with '%s' completed (%s eval tokens)", model, response.eval_count)
+    logger.info(f"Generate with '{model}' completed ({response.eval_count} eval tokens)")
     return response

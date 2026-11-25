@@ -19,15 +19,14 @@ Example:
     DomusAPI.shutdown()
 
 @todo: Implement Lares subsystem integration
-@todo: Create a dedicated logger module with categories to allow DomusAPI to have consistent logging across all subsystems.
 @todo: Create a configuration management module (DomusConfig) to handle configuration consistently across all subsystems (e.g., RuntimeConfig, BackendConfig, ModelConfig, IntegrationConfig, ToolConfig, ProjectConfig, etc.). Consistent hierarchy flow: Project > Environment > CLI.
 @todo: Implement tests that will fail if a config value does not have a reader.
 """
 
-import logging
+from utils import get_log_category
 from typing import Any, Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 __all__ = [
     "init",

@@ -40,24 +40,39 @@ ARTIFACT_FILE_SUFFIXES = (".pyc", ".pyo", ".pyd")
 ARTIFACT_FILE_NAMES = {"test-output.log", ".coverage"}
 
 
-def is_installed() -> bool:
-    try:
-        metadata.distribution(PACKAGE_NAME)
-        return True
-    except metadata.PackageNotFoundError:
-        return False
+def python_interpreters() -> list[Path]:
+    """Return the active Python and this checkout's virtualenv Python."""
+    local_venv = REPO_ROOT.parent / ".venv"
+    local_python = local_venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+    candidates = [Path(sys.executable), local_python]
+    interpreters: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved not in seen and resolved.is_file():
+            seen.add(resolved)
+            interpreters.append(resolved)
+    return interpreters
 
 
 def uninstall() -> None:
-    if not is_installed():
-        print(f"{PACKAGE_NAME} is not installed.")
-        return
-    print(f"Uninstalling {PACKAGE_NAME}...")
-    result = subprocess.run(
-        [sys.executable, "-m", "pip", "uninstall", "-y", PACKAGE_NAME]
-    )
-    if result.returncode != 0:
-        print(f"Warning: pip uninstall exited with code {result.returncode}.")
+    found = False
+    for interpreter in python_interpreters():
+        check = subprocess.run(
+            [str(interpreter), "-m", "pip", "show", PACKAGE_NAME],
+            capture_output=True, text=True,
+        )
+        if check.returncode != 0:
+            continue
+        found = True
+        print(f"Uninstalling {PACKAGE_NAME} from {interpreter}...")
+        result = subprocess.run(
+            [str(interpreter), "-m", "pip", "uninstall", "-y", PACKAGE_NAME]
+        )
+        if result.returncode != 0:
+            print(f"Warning: pip uninstall exited with code {result.returncode} for {interpreter}.")
+    if not found:
+        print(f"{PACKAGE_NAME} is not installed in the active Python or this checkout's .venv.")
 
 
 def find_artifacts() -> list[Path]:

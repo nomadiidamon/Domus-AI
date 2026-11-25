@@ -5,6 +5,7 @@ Initialize the runtime, inspect hardware, and shut down cleanly.
 """
 
 import DomusAPI
+from utils import livy
 
 
 def main() -> None:
@@ -14,6 +15,7 @@ def main() -> None:
         hardware = DomusAPI.detect_hardware()
         print(hardware.primary_accelerator)
         print(context.get_system_status())
+        print(f"Runtime log: {livy.log_file}")
     finally:
         DomusAPI.shutdown()
 

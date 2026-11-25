@@ -1,13 +1,13 @@
 # Reads all configuration files - models.json, ollama.env, claude.json, and runtime.json.
 import os
-import logging
+from utils import get_log_category
 from pathlib import Path
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 
 from utils import load_json
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 # Store loaded configurations
 _config_cache = {

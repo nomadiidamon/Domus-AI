@@ -30,13 +30,13 @@ protocol-only.
 """
 
 import json
-import logging
+from utils import get_log_category
 import sys
 import traceback
 
 from DomusEvents import EventType as BusEventType
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 PROTOCOL_VERSION = "2024-11-05"
 
@@ -62,9 +62,8 @@ class ToolServer:
         try:
             from DomusEvents import publish_event
             publish_event(event_type, source=self.name, payload=payload)
-        except Exception:
-            logger.debug("Mercurius bus unavailable; tool event not published",
-                         exc_info=True)
+        except Exception as error:
+            logger.debug("Mercurius bus unavailable; tool event not published", error=str(error))
 
     def serve(self, stdin=None, stdout=None):
         stdin = stdin or sys.stdin
@@ -76,7 +75,7 @@ class ToolServer:
             try:
                 request = json.loads(line)
             except json.JSONDecodeError:
-                logger.warning("Skipping malformed line: %r", line[:200])
+                logger.warning(f"Skipping malformed line: {line[:200]!r}")
                 continue
 
             response = self.handle(request)
@@ -129,7 +128,7 @@ class ToolServer:
         try:
             output = module.call(arguments)
         except PermissionError as e:
-            logger.info("Tool %s denied by user: %s", name, e)
+            logger.info(f"Tool {name} denied by user: {e}")
             self._publish(BusEventType.TOOL_RESULT, tool=name,
                           is_error=True, error=str(e), denied=True)
             return self._result(request_id, {
@@ -138,7 +137,7 @@ class ToolServer:
                 "denied": True,
             })
         except Exception as e:
-            logger.error("Tool %s failed: %s", name, e)
+            logger.exception(e, f"Tool {name} failed")
             self._publish(BusEventType.TOOL_RESULT, tool=name,
                           is_error=True, error=str(e))
             return self._result(request_id, {
@@ -184,6 +183,6 @@ def run_server(name: str, tool_package: str):
         if hasattr(module, "TOOL") and hasattr(module, "call"):
             tools[module.TOOL["name"]] = module
         else:
-            logger.warning("Skipping %s: no TOOL/call defined", info.name)
+            logger.warning(f"Skipping {info.name}: no TOOL/call defined")
 
     ToolServer(name, tools).serve()

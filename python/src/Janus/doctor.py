@@ -3,7 +3,7 @@ Checks for all needed dependencies: Python, Ollama, Claude, Git, Models, MCP val
 @todo: Add checks to ensure all entries to src/DomusData/models.json have a valid matching modelfile
 """
 import subprocess
-import logging
+from utils import get_log_category
 import urllib.request
 import urllib.error
 from typing import Dict, List, Tuple
@@ -11,7 +11,7 @@ from pathlib import Path
 from Hestia.software.doctor import Doctor
 from Janus.requirements import build_registry as _build_checker
 
-logger = logging.getLogger(__name__)
+logger = get_log_category(__name__)
 
 ## @todo: Read the config for the correct OLLAMA_API_BASE URL instead of hardcoding it.
 OLLAMA_API_BASE = "http://localhost:11434"
@@ -95,7 +95,7 @@ def check_models() -> Tuple[bool, List[str]]:
     if not _check_ollama_server_running():
         print("[!] Ollama server is not running -- cannot list models")
         print("  Start it with:  ollama serve")
-        logger.warning("Ollama server unreachable at %s", OLLAMA_API_BASE)
+        logger.warning(f"Ollama server unreachable at {OLLAMA_API_BASE}")
         return False, []
 
     try:

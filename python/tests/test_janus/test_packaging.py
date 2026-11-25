@@ -183,6 +183,13 @@ class TestBuiltWheel:
     def test_wheel_has_no_top_level_mcp(self, wheel_names):
         assert not any(n.startswith("mcp/") for n in wheel_names)
 
+    def test_wheel_declares_logging_dependencies(self, wheel_path, wheel_names):
+        metadata_name = next(name for name in wheel_names if name.endswith(".dist-info/METADATA"))
+        with zipfile.ZipFile(wheel_path) as wheel:
+            metadata = BytesParser().parsebytes(wheel.read(metadata_name))
+        requirements = {Requirement(value).name for value in metadata.get_all("Requires-Dist", [])}
+        assert {"auctor-utils", "platformdirs"} <= requirements
+
     def test_wheel_depends_on_external_hestia(self, wheel_path, wheel_names):
         assert not any(name.startswith("Hestia/") for name in wheel_names)
         assert "Janus/requirements.py" in wheel_names

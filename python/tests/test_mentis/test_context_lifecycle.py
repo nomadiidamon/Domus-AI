@@ -72,6 +72,25 @@ class TestStartup:
         assert started_context.memory_dir.exists()
         assert started_context.config_dir.exists()
 
+    def test_runtime_log_collects_multiple_subsystem_categories(self, started_context):
+        from utils import get_log_category, livy
+
+        get_log_category("Janus.main").info("janus runtime check")
+        get_log_category("Faber.models").info("faber runtime check")
+        assert livy.log_file.parent == started_context.logs_dir
+        text = livy.log_file.read_text()
+        assert "[Mentis] Runtime context startup complete" in text
+        assert "[Janus] janus runtime check" in text
+        assert "[Faber] faber runtime check" in text
+
+    def test_logging_failure_does_not_start_context(self, context, host_project_dir, monkeypatch):
+        def fail_logging():
+            raise RuntimeError("log unavailable")
+
+        monkeypatch.setattr(context, "_setup_logging", fail_logging)
+        assert not context.startup(suggested_host=host_project_dir, non_interactive=True)
+        assert not context.is_running
+
     def test_startup_sets_hardware_profile(self, started_context, fake_hardware_profile):
         assert started_context.hardware_profile is fake_hardware_profile
 
