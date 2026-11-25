@@ -4,8 +4,7 @@ Tests for Lares/profiles.py - AgentProfile and the registry
 
 Covers: default-profile fallback for unregistered models, case-
 insensitive lookup, registration/overwrite, and the exact quirks the
-four shipped profiles (Mercury/Analyst/Vulcan/Minerva) are supposed to
-declare - since those flags are what the rest of Lares (permissions,
+shipped model profiles are supposed to declare - since those flags are what the rest of Lares (permissions,
 response_policy, agent) actually act on, a regression here would
 silently re-break the behavior those modules were written to fix.
 """
@@ -64,7 +63,7 @@ class TestRegistryBasics:
 
     def test_list_profiles_includes_builtins(self):
         names = {p.name for p in list_profiles().values()}
-        assert {"Mercury", "Analyst", "Vulcan", "Minerva"} <= names
+        assert {"Mercury", "Analyst", "Vulcan", "Minerva", "Vesta", "Juno", "Ceres", "Apollo"} <= names
 
 
 class TestAgentProfileDefaults:
@@ -107,3 +106,11 @@ class TestBuiltinProfileQuirks:
     def test_minerva_does_not_support_tool_calls(self):
         profile = get_profile("Minerva")
         assert profile.supports_tool_calls is False
+
+    def test_small_lightweight_models_do_not_support_tool_calls(self):
+        assert get_profile("Vesta").supports_tool_calls is False
+        assert get_profile("Juno").supports_tool_calls is False
+
+    def test_larger_lightweight_models_support_tool_calls(self):
+        assert get_profile("Ceres").supports_tool_calls is True
+        assert get_profile("Apollo").supports_tool_calls is True

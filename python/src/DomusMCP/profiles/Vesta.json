@@ -1,0 +1,6 @@
+{
+  "model": "Vesta",
+  "description": "Tool-free lightweight assistant.",
+  "servers": [],
+  "allowed_tools": {}
+}

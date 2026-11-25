@@ -16,7 +16,7 @@ The package exports:
 - `AgentPermissions` for profile-aware MCP access checks.
 - `AgentProfile`, `get_profile(model)`, `list_profiles()`, and `register_profile(profile)` for model capability/quirk metadata.
 
-Profile names are case-insensitive. Unknown model names use `DEFAULT_PROFILE`, which assumes tool-call support but enables no response retries. Built-in profiles are registered for Mercury, Analyst, Vulcan, and Minerva. Profile fields include `supports_tool_calls`, `needs_fallback_tool_parsing`, `max_tool_iterations`, `ground_tool_replies`, `retry_on_empty_reply`, and `mcp_profile_name`.
+Profile names are case-insensitive. Unknown model names use `DEFAULT_PROFILE`, which assumes tool-call support but enables no response retries. Built-in profiles are registered for Mercury, Analyst, Vulcan, Minerva, Vesta, Juno, Ceres, and Apollo. Vesta and Juno do not advertise tools; Ceres and Apollo support tool calls but are restricted by their MCP profiles to project-scoped filesystem tools. Profile fields include `supports_tool_calls`, `needs_fallback_tool_parsing`, `max_tool_iterations`, `ground_tool_replies`, `retry_on_empty_reply`, and `mcp_profile_name`.
 
 ## Agent permissions
 

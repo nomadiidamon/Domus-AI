@@ -185,7 +185,44 @@ class TestHandleBuild:
     def test_calls_build_model(self):
         with patch("Janus.main.build_model") as mock_build:
             main.handle_build(["mercury"])
-        mock_build.assert_called_once_with("mercury")
+        assert mock_build.call_args.args == ("mercury",)
+        assert callable(mock_build.call_args.kwargs["progress"])
+
+    def test_build_progress_shows_percentage_and_throttles_repeated_updates(self, capsys):
+        from Hestia.software.installer import InstallActionStatus, InstallProgress
+
+        def fake_build(model, progress):
+            progress(InstallProgress("build", "build mercury", "pulling", 0.25))
+            progress(InstallProgress("build", "build mercury", "pulling", 0.26))
+            progress(InstallProgress("build", "build mercury", "finished", 1.0, InstallActionStatus.SUCCEEDED))
+
+        with patch("Janus.main.build_model", side_effect=fake_build):
+            main.handle_build(["mercury"])
+        output = capsys.readouterr().out
+        assert "pulling (25.0%)" in output
+        assert "pulling (26.0%)" not in output
+        assert "finished (100.0%)" in output
+
+    def test_terminal_progress_finishes_before_success_message(self):
+        import io
+        from Hestia.software.installer import InstallActionStatus, InstallProgress
+
+        output = io.StringIO()
+        output.isatty = lambda: True
+
+        def fake_build(model, progress):
+            progress(InstallProgress("build", "build vesta", "pulling manifest", None))
+            progress(InstallProgress("build", "build vesta", "pulling", 0.5))
+            progress(InstallProgress("build", "build vesta", "finished", 1.0, InstallActionStatus.SUCCEEDED))
+
+        with patch("Janus.main.sys.stdout", output), \
+             patch("Janus.main.build_model", side_effect=fake_build):
+            main.handle_build(["vesta"])
+
+        text = output.getvalue()
+        assert "pulling (50.0%)" in text
+        assert "finished (100.0%)" in text
+        assert "\n[OK] Model 'vesta' built successfully\n" in text
 
     def test_exits_1_on_exception(self):
         with patch("Janus.main.build_model", side_effect=RuntimeError("boom")):

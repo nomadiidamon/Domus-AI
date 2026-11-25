@@ -1,0 +1,6 @@
+{
+  "model": "Juno",
+  "description": "Tool-free lightweight assistant.",
+  "servers": [],
+  "allowed_tools": {}
+}

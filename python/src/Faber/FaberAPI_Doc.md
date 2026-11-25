@@ -25,7 +25,7 @@ Sessions are stored in a process-local registry; they are not persisted across r
 - `start_model(model)` launches `ollama run <model>` unless a tracked session with that model name already exists. When a context is bound, model load/unload state is reported to it.
 - `stop_model(model)` stops a tracked model session; it currently has no explicit return value.
 - `pull_model(model)` and `remove_model(model)` call the matching Ollama CLI operations.
-- `build_model(model)` resolves the Modelfile from model configuration, then falls back to `Modelfiles/<Name>/Modelfile.<Name>`.
+- `build_model(model)` resolves the Modelfile from model configuration, then falls back to `Modelfiles/<Name>/Modelfile.<Name>`. It sends a create request to Ollama and reports streamed progress through its optional progress callback. The supported Modelfile directives are `FROM` (an existing model), `SYSTEM`, and the numeric and stop `PARAMETER` values recognized by Faber; unsupported directives or local model files are rejected.
 - `list_models()` parses `ollama list` into `name`, `id`, `size`, and `modified` fields.
 - `set_context(runtime_context)` / `Faber.models.set_context(None)` bind or clear the Mentis context used for tracking.
 

@@ -11,6 +11,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "mercurius-events>=0.5.1",
     "hestia-system>=0.5.0",
+    "auctor-utils>=0.2.1",
 ]
 
 [project.optional-dependencies]

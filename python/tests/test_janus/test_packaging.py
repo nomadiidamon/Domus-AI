@@ -102,6 +102,34 @@ class TestPackagedDataComplete:
         for model in models:
             assert (paths.get_mcp_path() / "profiles" / f"{model}.json").is_file()
 
+    def test_lightweight_model_tool_permissions(self, no_override):
+        profiles_dir = paths.get_mcp_path() / "profiles"
+        for model in ("Vesta", "Juno"):
+            profile = json.loads((profiles_dir / f"{model}.json").read_text())
+            assert profile["servers"] == []
+            assert profile["allowed_tools"] == {}
+
+        expected_filesystem_tools = {
+            "read_file", "list_directory", "search_files", "write_file", "edit_file",
+        }
+        for model in ("Ceres", "Apollo"):
+            profile = json.loads((profiles_dir / f"{model}.json").read_text())
+            assert profile["servers"] == ["filesystem"]
+            assert set(profile["allowed_tools"]["filesystem"]) == expected_filesystem_tools
+
+    def test_lightweight_model_base_tags_match_modelfiles(self, no_override):
+        models = json.loads((paths.get_config_path() / "models.json").read_text())
+        expected_bases = {
+            "Vesta": "qwen3:0.6b",
+            "Juno": "llama3.2:1b",
+            "Ceres": "qwen3:1.7b",
+            "Apollo": "llama3.2:3b",
+        }
+        for model, base in expected_bases.items():
+            assert models[model]["base"] == base
+            modelfile = paths.get_modelfiles_path() / model / f"Modelfile.{model}"
+            assert modelfile.read_text(encoding="utf-8").splitlines()[0] == f"FROM {base}"
+
 
 @pytest.fixture(scope="module")
 def wheel_path(tmp_path_factory):
@@ -142,14 +170,14 @@ class TestBuiltWheel:
         assert f"DomusData/config/{name}" in wheel_names
 
     def test_wheel_has_modelfiles(self, wheel_names):
-        for model in ["Analyst", "Mercury", "Minerva", "Vulcan"]:
+        for model in ["Analyst", "Mercury", "Minerva", "Vulcan", "Vesta", "Juno", "Ceres", "Apollo"]:
             assert f"DomusData/Modelfiles/{model}/Modelfile.{model}" in wheel_names
 
     def test_wheel_has_mcp_servers_and_profiles(self, wheel_names):
         assert "DomusMCP/servers.json" in wheel_names
         for server in ["filesystem", "git", "fetch"]:
             assert f"DomusMCP/{server}/__main__.py" in wheel_names
-        for model in ["Analyst", "Mercury", "Minerva", "Vulcan"]:
+        for model in ["Analyst", "Mercury", "Minerva", "Vulcan", "Vesta", "Juno", "Ceres", "Apollo"]:
             assert f"DomusMCP/profiles/{model}.json" in wheel_names
 
     def test_wheel_has_no_top_level_mcp(self, wheel_names):

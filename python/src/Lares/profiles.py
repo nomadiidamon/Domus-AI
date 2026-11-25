@@ -32,11 +32,9 @@ Analyst, Vulcan and Minerva through the plain Janus CLI chat loop:
     and retry_on_empty_reply are what Lares.response_policy acts on to
     paper over exactly those two symptoms.
 
-Registering a new model (whether a brand new base model or a
-differently-tuned build of an existing one) is adding or editing one
-AgentProfile - nothing else in Lares, Faber or Janus needs to change
-for the new model to get the same tool-usage, response-pattern and
-permission handling as any other.
+Registering or retuning a shipped model's Lares capabilities is adding
+or editing one AgentProfile. Model assets and MCP permissions remain
+configured separately in DomusData and DomusMCP.
 """
 
 from dataclasses import dataclass, field
@@ -181,8 +179,8 @@ def list_profiles() -> Dict[str, AgentProfile]:
 
 # ---------------------------------------------------------------------------
 # Built-in profiles for the models shipped with this project's Modelfiles/.
-# These encode exactly the quirks diagnosed for Mercury/Analyst/Vulcan/
-# Minerva. A fresh model (or a retuned Modelfile that fixes one of these
+# These encode the quirks and capabilities declared for the shipped
+# models. A fresh model (or a retuned Modelfile that fixes one of these
 # quirks) just needs its profile added/edited here - nothing in Faber or
 # Janus needs to change.
 # ---------------------------------------------------------------------------
@@ -236,4 +234,32 @@ register_profile(AgentProfile(
         "Lightweight assistant. Base model has no native Ollama tool-call "
         "support - tools are not offered to this model at all."
     ),
+))
+
+register_profile(AgentProfile(
+    name="Vesta",
+    base_model="qwen3:0.6b",
+    supports_tool_calls=False,
+    description="Tiny tool-free assistant for short explanations and simple tasks.",
+))
+
+register_profile(AgentProfile(
+    name="Juno",
+    base_model="llama3.2:1b",
+    supports_tool_calls=False,
+    description="Compact tool-free assistant for quick answers and simple edits.",
+))
+
+register_profile(AgentProfile(
+    name="Ceres",
+    base_model="qwen3:1.7b",
+    supports_tool_calls=True,
+    description="Compact coding assistant with project-scoped filesystem access only.",
+))
+
+register_profile(AgentProfile(
+    name="Apollo",
+    base_model="llama3.2:3b",
+    supports_tool_calls=True,
+    description="Compact coding assistant with project-scoped filesystem access only.",
 ))

@@ -1,0 +1,8 @@
+{
+  "model": "Apollo",
+  "description": "Project-scoped filesystem access only; external reads, Git, and fetch are not allowed.",
+  "servers": ["filesystem"],
+  "allowed_tools": {
+    "filesystem": ["read_file", "list_directory", "search_files", "write_file", "edit_file"]
+  }
+}

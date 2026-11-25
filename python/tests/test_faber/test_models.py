@@ -7,14 +7,16 @@ subprocess.Popen and optionally notify a bound RuntimeContext
 the context are faked here so tests never spawn real processes or
 depend on Mentis.context being importable/side-effect-free.
 
-pull_model/build_model/list_models/remove_model shell out via
-subprocess.run, which is mocked so no real ollama binary or network
-access is needed. build_model's Modelfile resolution (_resolve_modelfile)
-is tested separately with Janus.config/Janus.paths patched out.
+Model management commands mock subprocesses or HTTP so no real Ollama
+binary or network access is needed. build_model's Modelfile resolution
+(_resolve_modelfile) is tested separately with Janus.config/Janus.paths patched out.
 """
 
 import subprocess
+import io
+import json
 from unittest.mock import patch, MagicMock
+import urllib.error
 
 import pytest
 
@@ -148,25 +150,54 @@ class TestEventBusChain:
 
 class TestPullModel:
     def test_runs_ollama_pull(self):
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        response = MagicMock()
+        response.__enter__.return_value = [b'{"status":"pulling","completed":5,"total":10}\n']
+        with patch("urllib.request.urlopen", return_value=response) as mock_urlopen:
             pull_model("mercury")
 
-        assert mock_run.call_args[0][0] == ["ollama", "pull", "mercury"]
+        request = mock_urlopen.call_args.args[0]
+        assert request.full_url == "http://localhost:11434/api/pull"
+        assert json.loads(request.data) == {"name": "mercury", "stream": True}
+
+    def test_reports_streamed_progress_to_tracker(self):
+        from Hestia.software.installer import InstallActionStatus
+
+        response = MagicMock()
+        response.__enter__.return_value = [
+            b'{"status":"pulling layers","completed":25,"total":100}\n',
+        ]
+        events = []
+        with patch("urllib.request.urlopen", return_value=response):
+            pull_model("mercury", progress=events.append)
+
+        assert [event.completed for event in events] == [0.0, 0.25, 1.0]
+        assert events[-1].status is InstallActionStatus.SUCCEEDED
+
+    def test_uses_install_progress_tracker_by_default(self):
+        response = MagicMock()
+        response.__enter__.return_value = [b'{"status":"pulling"}\n']
+        tracker = MagicMock()
+        with patch("Hestia.software.installer.InstallProgressTracker", return_value=tracker) as factory, \
+             patch("urllib.request.urlopen", return_value=response):
+            pull_model("mercury")
+
+        factory.assert_called_once_with()
+        assert tracker.call_count == 3
 
     def test_raises_on_nonzero_exit(self):
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="no such model")
+        response = io.BytesIO(b'{"error":"no such model"}')
+        error = urllib.error.HTTPError("url", 400, "Bad Request", {}, response)
+        with patch("urllib.request.urlopen", side_effect=error):
             with pytest.raises(RuntimeError, match="no such model"):
                 pull_model("mercury")
 
-    def test_raises_when_ollama_missing(self):
-        with patch("subprocess.run", side_effect=FileNotFoundError):
-            with pytest.raises(RuntimeError, match="Ollama executable not found"):
+    def test_raises_when_ollama_server_unreachable(self):
+        with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("offline")):
+            with pytest.raises(RuntimeError, match="Ollama server unreachable"):
                 pull_model("mercury")
 
     def test_raises_on_timeout(self):
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="ollama", timeout=1)):
+        with patch("urllib.request.urlopen", side_effect=TimeoutError):
             with pytest.raises(RuntimeError, match="timed out"):
                 pull_model("mercury")
 
@@ -224,15 +255,40 @@ class TestResolveModelfile:
 
 class TestBuildModel:
     def test_runs_ollama_create_with_resolved_modelfile(self, tmp_path):
+        from Hestia.software.installer import InstallActionStatus
+
         modelfile = tmp_path / "Modelfile.Mercury"
-        modelfile.write_text("FROM base\n")
+        modelfile.write_text('FROM base\nSYSTEM """\nYou are helpful.\n"""\nPARAMETER temperature 0.2\nPARAMETER num_ctx 8192\n')
+        response = MagicMock()
+        response.__enter__.return_value = [
+            b'{"status":"pulling","completed":25,"total":100}\n',
+            b'{"status":"success"}\n',
+        ]
+        events = []
 
         with patch.object(models_module, "_resolve_modelfile", return_value=modelfile), \
-             patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-            build_model("mercury")
+             patch("urllib.request.urlopen", return_value=response) as mock_urlopen:
+            build_model("mercury", progress=events.append)
 
-        assert mock_run.call_args[0][0] == ["ollama", "create", "mercury", "-f", str(modelfile)]
+        request = mock_urlopen.call_args.args[0]
+        assert request.full_url == "http://localhost:11434/api/create"
+        assert json.loads(request.data) == {
+            "model": "mercury", "stream": True, "from": "base",
+            "system": "You are helpful.",
+            "parameters": {"temperature": 0.2, "num_ctx": 8192},
+        }
+        assert [event.completed for event in events] == [0.0, 0.25, None, 1.0]
+        assert events[-1].status is InstallActionStatus.SUCCEEDED
+
+    def test_bundled_modelfiles_produce_create_fields(self):
+        from Janus.config import load_models_config
+
+        for name in load_models_config():
+            path = models_module._resolve_modelfile(name)
+            fields = models_module._modelfile_create_fields(path.read_text(encoding="utf-8"))
+            assert fields["from"]
+            assert fields["system"]
+            assert fields["parameters"]
 
     def test_raises_when_no_modelfile_found(self):
         with patch.object(models_module, "_resolve_modelfile", side_effect=RuntimeError("No Modelfile found")):
@@ -240,11 +296,42 @@ class TestBuildModel:
                 build_model("mercury")
 
     def test_raises_on_build_failure(self, tmp_path):
-        with patch.object(models_module, "_resolve_modelfile", return_value=tmp_path / "Modelfile"), \
-             patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="parse error")
-            with pytest.raises(RuntimeError, match="parse error"):
-                build_model("mercury")
+        from Hestia.software.installer import InstallActionStatus
+
+        modelfile = tmp_path / "Modelfile"
+        modelfile.write_text("FROM base\n")
+        response = MagicMock()
+        response.__enter__.return_value = [b'{"error":"base not found"}\n']
+        events = []
+        with patch.object(models_module, "_resolve_modelfile", return_value=modelfile), \
+               patch("urllib.request.urlopen", return_value=response):
+            with pytest.raises(RuntimeError, match="base not found"):
+                build_model("mercury", progress=events.append)
+        assert events[-1].status is InstallActionStatus.FAILED
+
+    @pytest.mark.parametrize("content, message", [
+        ("SYSTEM hello\n", "FROM directive"),
+        ("FROM base\nTEMPLATE hello\n", "Unsupported Modelfile directive: TEMPLATE"),
+        ("FROM base\nPARAMETER mystery 1\n", "Unsupported Modelfile parameter: mystery"),
+        ("FROM base\nPARAMETER num_ctx invalid\n", "Invalid value"),
+        ('FROM base\nSYSTEM """unfinished\n', "Unterminated SYSTEM"),
+        ("FROM ./model.gguf\n", "Local model files"),
+        ("FROM base\nFROM other\n", "Multiple FROM"),
+    ])
+    def test_rejects_unsupported_or_invalid_modelfiles(self, tmp_path, content, message):
+        modelfile = tmp_path / "Modelfile"
+        modelfile.write_text(content)
+        with patch.object(models_module, "_resolve_modelfile", return_value=modelfile), \
+             patch("urllib.request.urlopen") as mock_urlopen:
+            with pytest.raises(RuntimeError, match=message):
+                build_model("mercury", progress=lambda event: None)
+        mock_urlopen.assert_not_called()
+
+    def test_repeated_stop_parameters_are_preserved(self):
+        fields = models_module._modelfile_create_fields(
+            'FROM base\nPARAMETER stop "first stop"\nPARAMETER stop second\n'
+        )
+        assert fields["parameters"]["stop"] == ["first stop", "second"]
 
 
 class TestListModels:

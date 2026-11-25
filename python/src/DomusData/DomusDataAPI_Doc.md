@@ -29,5 +29,9 @@ Each model directory contains one Ollama file:
 | `Modelfiles/Mercury/Modelfile.Mercury` | `qwen2.5-coder:14b` | General coding and development. |
 | `Modelfiles/Minerva/Modelfile.Minerva` | `starcoder2:7b` | Lightweight scripts and quick tasks. |
 | `Modelfiles/Vulcan/Modelfile.Vulcan` | `deepseek-coder-v2:16b` | Heavy reasoning and difficult engineering tasks. |
+| `Modelfiles/Vesta/Modelfile.Vesta` | `qwen3:0.6b` | Tiny, tool-free answers and simple tasks. |
+| `Modelfiles/Juno/Modelfile.Juno` | `llama3.2:1b` | Compact, tool-free answers and simple explanations. |
+| `Modelfiles/Ceres/Modelfile.Ceres` | `qwen3:1.7b` | Compact coding with project-scoped filesystem tools. |
+| `Modelfiles/Apollo/Modelfile.Apollo` | `llama3.2:3b` | Compact coding with project-scoped filesystem tools. |
 
 The model's `base` entry in `models.json` describes the intended Ollama base model; the Modelfile itself is the build input. These files and config assets are included as package data in built distributions.

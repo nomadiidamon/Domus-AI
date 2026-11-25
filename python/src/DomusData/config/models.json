@@ -22,5 +22,29 @@
     "modelfile": "D:\\AI\\Modelfiles\\Analyst\\Modelfile",
     "profile": "Heavy Analyst",
     "description": "Heavy-weight analyst assistant for review and assestments."
+  },
+  "Vesta": {
+    "base": "qwen3:0.6b",
+    "modelfile": "D:\\AI\\Modelfiles\\Vesta\\Modelfile",
+    "profile": "lightweight",
+    "description": "Tiny, tool-free assistant for short explanations and simple tasks."
+  },
+  "Juno": {
+    "base": "llama3.2:1b",
+    "modelfile": "D:\\AI\\Modelfiles\\Juno\\Modelfile",
+    "profile": "lightweight",
+    "description": "Compact, tool-free assistant for quick answers and simple explanations."
+  },
+  "Ceres": {
+    "base": "qwen3:1.7b",
+    "modelfile": "D:\\AI\\Modelfiles\\Ceres\\Modelfile",
+    "profile": "lightweight",
+    "description": "Compact coding assistant with project-scoped filesystem tools."
+  },
+  "Apollo": {
+    "base": "llama3.2:3b",
+    "modelfile": "D:\\AI\\Modelfiles\\Apollo\\Modelfile",
+    "profile": "lightweight",
+    "description": "Compact coding assistant with project-scoped filesystem tools."
   }
 }

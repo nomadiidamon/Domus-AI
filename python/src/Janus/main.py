@@ -209,9 +209,34 @@ def handle_build(args: list) -> None:
     
     model = args[0]
     logger.info(f"Building model: {model}")
-    
+
+    from Hestia.software.installer import InstallActionStatus
+
+    is_terminal = sys.stdout.isatty()
+    previous_line = ""
+    last_progress = None
+
+    def show_progress(event):
+        nonlocal previous_line, last_progress
+        if event.status == InstallActionStatus.FAILED:
+            if is_terminal and previous_line:
+                print("\r" + " " * len(previous_line) + "\r", end="", flush=True)
+            return
+        percentage = "" if event.completed is None else f" ({event.completed * 100:.1f}%)"
+        line = f"{event.dependency_name}: {event.message}{percentage}"
+        if is_terminal:
+            print("\r" + line.ljust(len(previous_line)), end="", flush=True)
+            previous_line = line
+            if event.status == InstallActionStatus.SUCCEEDED:
+                print(flush=True)
+        else:
+            progress_key = (event.message, None if event.completed is None else int(event.completed * 10))
+            if progress_key != last_progress or event.status == InstallActionStatus.SUCCEEDED:
+                print(line, flush=True)
+                last_progress = progress_key
+
     try:
-        build_model(model)
+        build_model(model, progress=show_progress)
         logger.info(f"Model '{model}' built successfully")
         print(f"[OK] Model '{model}' built successfully")
         
