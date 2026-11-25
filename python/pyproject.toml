@@ -6,9 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "domus-ai"
 dynamic = ["version", "description", "readme", "authors", "license", "requires-python", "urls"]
 dependencies = [
-    "packaging>=23.0",
     "platformdirs>=3.0",
-    "nvidia-ml-py>=12.0.0",
     "python-dotenv>=1.0.0",
     "mercurius-events>=0.5.1",
     "hestia-system>=0.5.0",
@@ -18,7 +16,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
+    "packaging>=23.0",
 ]
+nvidia = ["hestia-system[nvidia]>=0.5.0"]
 
 [project.scripts]
 janus = "Janus.main:main"

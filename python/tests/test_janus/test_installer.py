@@ -28,11 +28,14 @@ def make_registry(state, required=True, kind=DependencyKind.PYTHON_PACKAGE):
 def test_shared_registry_contains_runtime_requirements():
     results = installer._build_checker().check_all()
     assert set(results) == {
-        "packaging", "python-dotenv", "nvidia-ml-py", "mercurius-events", "hestia-system",
+        "platformdirs", "auctor-utils", "python-dotenv", "nvidia-ml-py", "mercurius-events", "hestia-system",
         "python", "ollama", "git", "claude",
     }
     assert results["hestia-system"].version_specifier == ">=0.5.0"
     assert not results["claude"].required
+    assert not results["nvidia-ml-py"].required
+    assert results["platformdirs"].required
+    assert results["auctor-utils"].required
 
 
 @pytest.mark.parametrize("version, expected", [
@@ -111,6 +114,15 @@ def test_failed_action_is_not_hidden_by_successful_recheck():
 
 def test_missing_optional_command_does_not_trigger_install_or_fail():
     registry = make_registry({"status": DependencyStatus.MISSING}, required=False, kind=DependencyKind.SYSTEM_COMMAND)
+    with patch.object(installer, "_build_checker", return_value=registry), \
+         patch.object(installer.PipBackend, "install") as install:
+        success, _ = installer.check_and_repair()
+    assert success
+    install.assert_not_called()
+
+
+def test_missing_optional_package_does_not_trigger_install_or_fail():
+    registry = make_registry({"status": DependencyStatus.MISSING}, required=False)
     with patch.object(installer, "_build_checker", return_value=registry), \
          patch.object(installer.PipBackend, "install") as install:
         success, _ = installer.check_and_repair()

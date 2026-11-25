@@ -26,6 +26,8 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 python -m pip install domus-ai
 ```
 
+For NVIDIA GPU detection, install the optional extra with `python -m pip install "domus-ai[nvidia]"` (or `python -m pip install -e "./python[dev,nvidia]"` for a checkout). Without it, Hestia may not detect NVIDIA GPUs, particularly on Linux; the extra does not install NVIDIA drivers.
+
 For development and tests from a checkout:
 
 ```bash

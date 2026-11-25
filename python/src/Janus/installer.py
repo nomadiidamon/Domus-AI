@@ -60,7 +60,7 @@ def check_and_repair(auto_repair: bool = True) -> tuple[bool, dict]:
                 target=f"{name}{result.version_specifier or ''}",
             )
             for name, result in results.items()
-            if result.kind == DependencyKind.PYTHON_PACKAGE
+            if result.kind == DependencyKind.PYTHON_PACKAGE and result.required
         ]
         if requests:
             installer = Installer(registry, {"pip": PipBackend()})

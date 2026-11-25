@@ -25,7 +25,7 @@ class TestBuildChecker:
     def test_registers_expected_dependency_names(self):
         results = doctor._build_checker().check_all()
         assert set(results) == {
-            "packaging", "python-dotenv", "nvidia-ml-py", "mercurius-events", "hestia-system",
+            "platformdirs", "auctor-utils", "python-dotenv", "nvidia-ml-py", "mercurius-events", "hestia-system",
             "python", "ollama", "git", "claude",
         }
 

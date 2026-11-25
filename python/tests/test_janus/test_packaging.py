@@ -190,6 +190,16 @@ class TestBuiltWheel:
         requirements = {Requirement(value).name for value in metadata.get_all("Requires-Dist", [])}
         assert {"auctor-utils", "platformdirs"} <= requirements
 
+    def test_wheel_declares_optional_nvidia_and_test_packaging(self, wheel_path, wheel_names):
+        metadata_name = next(name for name in wheel_names if name.endswith(".dist-info/METADATA"))
+        with zipfile.ZipFile(wheel_path) as wheel:
+            metadata = BytesParser().parsebytes(wheel.read(metadata_name))
+        requirements = [Requirement(value) for value in metadata.get_all("Requires-Dist", [])]
+        base = [requirement for requirement in requirements if not requirement.marker or requirement.marker.evaluate({"extra": ""})]
+        assert not {"packaging", "nvidia-ml-py"} & {requirement.name for requirement in base}
+        assert any(requirement.name == "packaging" and requirement.marker and requirement.marker.evaluate({"extra": "dev"}) for requirement in requirements)
+        assert any(requirement.name == "hestia-system" and "nvidia" in requirement.extras and requirement.marker and requirement.marker.evaluate({"extra": "nvidia"}) for requirement in requirements)
+
     def test_wheel_depends_on_external_hestia(self, wheel_path, wheel_names):
         assert not any(name.startswith("Hestia/") for name in wheel_names)
         assert "Janus/requirements.py" in wheel_names
